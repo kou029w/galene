@@ -1,4 +1,4 @@
-module github.com/jech/galene
+module github.com/kou029w/galene
 
 go 1.21
 

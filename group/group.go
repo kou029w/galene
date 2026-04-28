@@ -20,7 +20,7 @@ import (
 	"github.com/pion/interceptor"
 	"github.com/pion/webrtc/v4"
 
-	"github.com/jech/galene/token"
+	"github.com/kou029w/galene/token"
 )
 
 var Directory, DataDirectory string

@@ -6,9 +6,9 @@ import (
 	"net"
 	"sync"
 
-	"github.com/jech/galene/conn"
-	"github.com/jech/galene/group"
-	"github.com/jech/galene/sdpfrag"
+	"github.com/kou029w/galene/conn"
+	"github.com/kou029w/galene/group"
+	"github.com/kou029w/galene/sdpfrag"
 
 	"github.com/pion/sdp/v3"
 	"github.com/pion/webrtc/v4"

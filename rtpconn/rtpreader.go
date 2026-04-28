@@ -8,9 +8,9 @@ import (
 	"github.com/pion/rtp"
 	"github.com/pion/webrtc/v4"
 
-	"github.com/jech/galene/codecs"
-	"github.com/jech/galene/packetcache"
-	"github.com/jech/galene/rtptime"
+	"github.com/kou029w/galene/codecs"
+	"github.com/kou029w/galene/packetcache"
+	"github.com/kou029w/galene/rtptime"
 )
 
 func readLoop(track *rtpUpTrack) {

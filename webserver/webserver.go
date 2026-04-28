@@ -22,9 +22,9 @@ import (
 	"github.com/gorilla/websocket"
 
 	"github.com/jech/cert"
-	"github.com/jech/galene/diskwriter"
-	"github.com/jech/galene/group"
-	"github.com/jech/galene/rtpconn"
+	"github.com/kou029w/galene/diskwriter"
+	"github.com/kou029w/galene/group"
+	"github.com/kou029w/galene/rtpconn"
 )
 
 var server *http.Server

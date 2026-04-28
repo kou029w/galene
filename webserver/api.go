@@ -13,9 +13,9 @@ import (
 
 	"golang.org/x/crypto/bcrypt"
 
-	"github.com/jech/galene/group"
-	"github.com/jech/galene/stats"
-	"github.com/jech/galene/token"
+	"github.com/kou029w/galene/group"
+	"github.com/kou029w/galene/stats"
+	"github.com/kou029w/galene/token"
 )
 
 // checkAdmin checks whether the client authentifies as an administrator

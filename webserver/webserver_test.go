@@ -10,7 +10,7 @@ import (
 
 	"github.com/pion/webrtc/v4"
 
-	"github.com/jech/galene/group"
+	"github.com/kou029w/galene/group"
 )
 
 func TestParseGroupName(t *testing.T) {

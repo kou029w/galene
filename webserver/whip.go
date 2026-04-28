@@ -17,10 +17,10 @@ import (
 
 	"github.com/pion/webrtc/v4"
 
-	"github.com/jech/galene/group"
-	"github.com/jech/galene/ice"
-	"github.com/jech/galene/rtpconn"
-	"github.com/jech/galene/sdpfrag"
+	"github.com/kou029w/galene/group"
+	"github.com/kou029w/galene/ice"
+	"github.com/kou029w/galene/rtpconn"
+	"github.com/kou029w/galene/sdpfrag"
 )
 
 var idSecret []byte

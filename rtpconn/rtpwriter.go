@@ -6,9 +6,9 @@ import (
 	"sort"
 	"time"
 
-	"github.com/jech/galene/conn"
-	"github.com/jech/galene/packetcache"
-	"github.com/jech/galene/rtptime"
+	"github.com/kou029w/galene/conn"
+	"github.com/kou029w/galene/packetcache"
+	"github.com/kou029w/galene/rtptime"
 )
 
 // packetIndex is a request to send a packet from the cache.

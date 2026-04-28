@@ -26,8 +26,8 @@ import (
 	"golang.org/x/crypto/pbkdf2"
 	"golang.org/x/term"
 
-	"github.com/jech/galene/group"
-	"github.com/jech/galene/token"
+	"github.com/kou029w/galene/group"
+	"github.com/kou029w/galene/token"
 )
 
 type configuration struct {

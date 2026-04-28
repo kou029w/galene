@@ -4,7 +4,7 @@ import (
 	"encoding/json"
 	"testing"
 
-	"github.com/jech/galene/group"
+	"github.com/kou029w/galene/group"
 )
 
 func TestMakePassword(t *testing.T) {
