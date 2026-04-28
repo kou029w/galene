@@ -29,12 +29,12 @@ import (
 
 var server *http.Server
 
-var StaticRoot string
+var Static http.FileSystem
 
 var Insecure bool
 
 func Serve(address string, dataDir string) error {
-	http.Handle("/", &fileHandler{http.Dir(StaticRoot)})
+	http.Handle("/", &fileHandler{Static})
 	http.HandleFunc("/group/", groupHandler)
 	http.HandleFunc("/recordings",
 		func(w http.ResponseWriter, r *http.Request) {
@@ -108,7 +108,7 @@ func notFound(w http.ResponseWriter) {
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	w.WriteHeader(http.StatusNotFound)
 
-	f, err := os.Open(path.Join(StaticRoot, "404.html"))
+	f, err := Static.Open("/404.html")
 	if err != nil {
 		fmt.Fprintln(w, "<p>Not found</p>")
 		return
@@ -264,7 +264,7 @@ func (fh *fileHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 // serveFile is similar to http.ServeFile, except that it doesn't check
 // for .. and adds cachability headers.
 func serveFile(w http.ResponseWriter, r *http.Request, p string) {
-	f, err := os.Open(p)
+	f, err := Static.Open(p)
 	if err != nil {
 		httpError(w, err)
 		return
@@ -371,7 +371,7 @@ func groupHandler(w http.ResponseWriter, r *http.Request) {
 
 	status := g.Status(false, nil)
 	cspHeader(w, status.AuthServer)
-	serveFile(w, r, filepath.Join(StaticRoot, "galene.html"))
+	serveFile(w, r, "/galene.html")
 }
 
 func baseURL(r *http.Request) (*url.URL, error) {

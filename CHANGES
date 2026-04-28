@@ -1,5 +1,6 @@
 Galene 1.1 (unreleased):
 
+  * Embed static assets into binary.
   * Implemented "galenectl initial-setup".
   * Implemented global tokens.
   * Added options "-unrestricted-tokens" and "-auto-subgroups" to
