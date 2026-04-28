@@ -4,8 +4,8 @@ import (
 	"slices"
 	"strings"
 
-	"github.com/jech/galene/group"
-	"github.com/jech/galene/token"
+	"github.com/kou029w/galene/group"
+	"github.com/kou029w/galene/token"
 )
 
 func parseBearerToken(auth string) string {

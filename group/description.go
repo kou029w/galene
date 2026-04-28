@@ -12,7 +12,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/jech/galene/token"
+	"github.com/kou029w/galene/token"
 )
 
 var ErrTagMismatch = errors.New("tag mismatch")

@@ -4,8 +4,8 @@ import (
 	"sort"
 	"time"
 
-	"github.com/jech/galene/rtptime"
-	"github.com/jech/galene/stats"
+	"github.com/kou029w/galene/rtptime"
+	"github.com/kou029w/galene/stats"
 )
 
 func (c *webClient) GetStats() *stats.Client {

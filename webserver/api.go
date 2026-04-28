@@ -15,9 +15,9 @@ import (
 
 	"golang.org/x/crypto/bcrypt"
 
-	"github.com/jech/galene/group"
-	"github.com/jech/galene/stats"
-	"github.com/jech/galene/token"
+	"github.com/kou029w/galene/group"
+	"github.com/kou029w/galene/stats"
+	"github.com/kou029w/galene/token"
 )
 
 // isAdminOrExplicitPassword checks whether creds either identify

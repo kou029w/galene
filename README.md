@@ -7,7 +7,7 @@ and requires very moderate server resources.  It is described at
 ## Quick start
 
 ```sh
-git clone https://github.com/jech/galene
+git clone https://github.com/kou029w/galene
 cd galene
 CGO_ENABLED=0 go build -ldflags='-s -w'
 mkdir groups

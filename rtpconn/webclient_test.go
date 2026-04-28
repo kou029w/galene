@@ -5,7 +5,7 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/jech/galene/token"
+	"github.com/kou029w/galene/token"
 )
 
 var tokens = []string{

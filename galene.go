@@ -17,13 +17,13 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/jech/galene/diskwriter"
-	"github.com/jech/galene/group"
-	"github.com/jech/galene/ice"
-	"github.com/jech/galene/limit"
-	"github.com/jech/galene/token"
-	"github.com/jech/galene/turnserver"
-	"github.com/jech/galene/webserver"
+	"github.com/kou029w/galene/diskwriter"
+	"github.com/kou029w/galene/group"
+	"github.com/kou029w/galene/ice"
+	"github.com/kou029w/galene/limit"
+	"github.com/kou029w/galene/token"
+	"github.com/kou029w/galene/turnserver"
+	"github.com/kou029w/galene/webserver"
 )
 
 //go:embed all:static

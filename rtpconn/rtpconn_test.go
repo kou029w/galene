@@ -3,7 +3,7 @@ package rtpconn
 import (
 	"testing"
 
-	"github.com/jech/galene/rtptime"
+	"github.com/kou029w/galene/rtptime"
 )
 
 func TestDownTrackAtomics(t *testing.T) {

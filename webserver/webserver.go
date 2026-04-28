@@ -22,9 +22,9 @@ import (
 	"github.com/gorilla/websocket"
 
 	"github.com/jech/cert"
-	"github.com/jech/galene/diskwriter"
-	"github.com/jech/galene/group"
-	"github.com/jech/galene/rtpconn"
+	"github.com/kou029w/galene/diskwriter"
+	"github.com/kou029w/galene/group"
+	"github.com/kou029w/galene/rtpconn"
 )
 
 var server *http.Server
@@ -131,8 +131,7 @@ func httpError(w http.ResponseWriter, err error) {
 		return
 	}
 	if errors.Is(err, group.ErrUnknownPermission) {
-		thttpError := http.StatusBadRequest
-		http.Error(w, "unknown permission", thttpError)
+		http.Error(w, "unknown permission", http.StatusBadRequest)
 		return
 	}
 	var autherr *group.NotAuthorisedError
@@ -388,40 +387,43 @@ func baseURL(r *http.Request) (*url.URL, error) {
 		}
 	}
 	scheme := "https"
-	if Insecure {
+	if r.TLS == nil {
 		scheme = "http"
 	}
-	if pu != nil && pu.Scheme != "" {
-		scheme = pu.Scheme
-	}
-
 	host := r.Host
-	if pu != nil && pu.Host != "" {
-		host = pu.Host
+	path := ""
+	if pu != nil {
+		if pu.Scheme != "" {
+			scheme = pu.Scheme
+		}
+		if pu.Host != "" {
+			host = pu.Host
+		}
+		path = pu.Path
 	}
-
-	p := "/"
-	if pu != nil && pu.Path != "" {
-		p = pu.Path
+	base := url.URL{
+		Scheme: scheme,
+		Host:   host,
+		Path:   path,
 	}
-
-	return url.Parse(scheme + "://" + host + p)
+	return &base, nil
 }
 
 func groupStatusHandler(w http.ResponseWriter, r *http.Request) {
-	if redirect(w, r) {
+	pth, kind, rest := splitPath(r.URL.Path)
+	if kind != ".status" || rest != "" {
+		internalError(w, "groupStatusHandler: this shouldn't happen")
 		return
 	}
-
-	name := parseGroupName("/group/", r.URL.Path)
+	name := parseGroupName("/group/", pth)
 	if name == "" {
 		notFound(w)
 		return
 	}
 
-	g := group.Get(name)
-	if g == "" {
-		notFound(w)
+	g, err := group.Add(name, nil)
+	if err != nil {
+		httpError(w, err)
 		return
 	}
 
