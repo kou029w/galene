@@ -1,9 +1,12 @@
 package main
 
 import (
+	"embed"
 	"flag"
 	"fmt"
+	"io/fs"
 	"log"
+	"net/http"
 	"os"
 	"os/signal"
 	"path/filepath"
@@ -23,13 +26,16 @@ import (
 	"github.com/jech/galene/webserver"
 )
 
+//go:embed all:static
+var embeddedStatic embed.FS
+
 func main() {
-	var cpuprofile, memprofile, mutexprofile, httpAddr string
+	var cpuprofile, memprofile, mutexprofile, httpAddr, staticDir string
 	var udpRange string
 
 	flag.StringVar(&httpAddr, "http", ":8443", "web server `address`")
-	flag.StringVar(&webserver.StaticRoot, "static", "./static/",
-		"web server root `directory`")
+	flag.StringVar(&staticDir, "static", "",
+		"web server root `directory` (default: use files embedded in the binary)")
 	flag.BoolVar(&webserver.Insecure, "insecure", false,
 		"act as an HTTP server rather than HTTPS")
 	flag.StringVar(&group.DataDirectory, "data", "./data/",
@@ -129,6 +135,13 @@ func main() {
 			"tokens.jsonl",
 		),
 	)
+
+	if staticDir == "" {
+		static, _ := fs.Sub(embeddedStatic, "static")
+		webserver.Static = http.FS(static)
+	} else {
+		webserver.Static = http.Dir(staticDir)
+	}
 
 	// make sure the list of public groups is updated early
 	go group.Update()

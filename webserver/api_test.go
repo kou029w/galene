@@ -1,20 +1,17 @@
 package webserver
 
 import (
-	"errors"
-	"fmt"
-	"mime"
-	"os"
-	"reflect"
-	"strings"
-	"sync"
-	"time"
-
+	"bytes"
 	"encoding/json"
+	"errors"
+	"io"
 	"net/http"
+	"os"
 	"path/filepath"
+	"sync"
 	"testing"
 
+	"github.com/jech/galene/diskwriter"
 	"github.com/jech/galene/group"
 	"github.com/jech/galene/token"
 )
@@ -24,7 +21,7 @@ var setupOnce sync.Once
 func setup() {
 	setupOnce.Do(func() {
 		Insecure = true
-		StaticRoot = os.TempDir()
+		Static = http.Dir(os.TempDir())
 		err := Serve("localhost:1234", "")
 		if err != nil {
 			panic("could not start server")
@@ -38,443 +35,412 @@ func setupTest(dir, datadir string) error {
 	group.Directory = dir
 	group.DataDirectory = datadir
 	config := `{
-    "writableGroups": true,
     "users": {
-        "root": {
-            "password": "pw",
+        "admin": {
+            "password": "secret",
             "permissions": "admin"
+        },
+        "op": {
+            "password": "secret",
+            "permissions": "op"
         }
     }
 }`
-	f, err := os.Create(filepath.Join(group.DataDirectory, "config.json"))
+	err := os.WriteFile(filepath.Join(datadir, "config.json"), []byte(config), 0600)
 	if err != nil {
 		return err
 	}
-	defer f.Close()
-	_, err = f.WriteString(config)
-	if err != nil {
-		return err
-	}
+	group.ResetConfiguration()
 
 	token.SetStatefulFilename(filepath.Join(datadir, "tokens.jsonl"))
+	token.ResetTokens()
+
 	return nil
 }
 
-func marshalToString(v any) string {
-	buf, err := json.Marshal(v)
+func query(method, url, auth, body string) (int, []byte, error) {
+	req, err := http.NewRequest(method, "http://localhost:1234"+url,
+		bytes.NewReader([]byte(body)))
 	if err != nil {
-		return ""
+		return 0, nil, err
 	}
-	return string(buf)
+	if auth != "" {
+		req.Header.Set("Authorization", auth)
+	}
+
+	res, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return 0, nil, err
+	}
+	defer res.Body.Close()
+
+	resBody, err := io.ReadAll(res.Body)
+	return res.StatusCode, resBody, err
 }
 
-func TestApi(t *testing.T) {
-	err := setupTest(t.TempDir(), t.TempDir())
+func queryJSON[T any](method, url, auth, body string) (int, *T, error) {
+	status, resBody, err := query(method, url, auth, body)
 	if err != nil {
-		t.Fatal(err)
+		return status, nil, err
 	}
-
-	client := http.Client{}
-
-	do := func(method, path, ctype, im, inm, body string) (*http.Response, error) {
-		req, err := http.NewRequest(method,
-			"http://localhost:1234"+path,
-			strings.NewReader(body),
-		)
-		if err != nil {
-			return nil, err
-		}
-		if ctype != "" {
-			req.Header.Set("Content-Type", ctype)
-		}
-		if im != "" {
-			req.Header.Set("If-Match", im)
-		}
-		if inm != "" {
-			req.Header.Set("If-None-Match", inm)
-		}
-		req.SetBasicAuth("root", "pw")
-		return client.Do(req)
-	}
-
-	getJSON := func(path string, value any) error {
-		resp, err := do("GET", path, "", "", "", "")
-		if err != nil {
-			return err
-		}
-		defer resp.Body.Close()
-		if resp.StatusCode != http.StatusOK {
-			return fmt.Errorf("Status is %v", resp.StatusCode)
-		}
-		ctype, _, err :=
-			mime.ParseMediaType(resp.Header.Get("Content-Type"))
-		if err != nil || !strings.EqualFold(ctype, "application/json") {
-			return errors.New("Unexpected content-type")
-		}
-		d := json.NewDecoder(resp.Body)
-		return d.Decode(value)
-	}
-
-	var groups []string
-	err = getJSON("/galene-api/v0/.groups/", &groups)
-	if err != nil || len(groups) != 0 {
-		t.Errorf("Get groups: %v", err)
-	}
-
-	resp, err := do("PUT", "/galene-api/v0/.groups/test/",
-		"application/json", "\"foo\"", "",
-		"{}")
-	if err != nil || resp.StatusCode != http.StatusPreconditionFailed {
-		t.Errorf("Create group (bad ETag): %v %v", err, resp.StatusCode)
-	}
-
-	resp, err = do("PUT", "/galene-api/v0/.groups/test/",
-		"text/plain", "", "",
-		"Hello, world!")
-	if err != nil || resp.StatusCode != http.StatusUnsupportedMediaType {
-		t.Errorf("Create group (bad content-type): %v %v",
-			err, resp.StatusCode)
-	}
-
-	resp, err = do("PUT", "/galene-api/v0/.groups/test/",
-		"application/json", "", "*",
-		"{}")
-	if err != nil || resp.StatusCode != http.StatusCreated {
-		t.Errorf("Create group: %v %v", err, resp.StatusCode)
-	}
-
-	var desc *group.Description
-	err = getJSON("/galene-api/v0/.groups/test/", &desc)
-	if err != nil || len(desc.Users) != 0 {
-		t.Errorf("Get group: %v", err)
-	}
-
-	resp, err = do("PUT", "/galene-api/v0/.groups/test/",
-		"application/json", "", "*",
-		"{}")
-	if err != nil || resp.StatusCode != http.StatusPreconditionFailed {
-		t.Errorf("Create group (bad ETag): %v %v", err, resp.StatusCode)
-	}
-
-	resp, err = do("DELETE", "/galene-api/v0/.groups/test/",
-		"", "", "*", "")
-	if err != nil || resp.StatusCode != http.StatusPreconditionFailed {
-		t.Errorf("Delete group (bad ETag): %v %v", err, resp.StatusCode)
-	}
-
-	err = getJSON("/galene-api/v0/.groups/", &groups)
-	if err != nil || len(groups) != 1 || groups[0] != "test" {
-		t.Errorf("Get groups: %v %v", err, groups)
-	}
-
-	resp, err = do("PUT", "/galene-api/v0/.groups/test/.keys",
-		"application/jwk-set+json", "", "",
-		`{"keys": [{
-                            "kty": "oct", "alg": "HS256",
-                            "k": "4S9YZLHK1traIaXQooCnPfBw_yR8j9VEPaAMWAog_YQ"
-                 }]}`)
-	if err != nil || resp.StatusCode != http.StatusNoContent {
-		t.Errorf("Set key: %v %v", err, resp.StatusCode)
-	}
-
-	err = getJSON("/galene-api/v0/.groups/test/.users/", &groups)
-	if err != nil || len(groups) != 0 {
-		t.Errorf("Get users: %v", err)
-	}
-
-	resp, err = do("PUT", "/galene-api/v0/.groups/test/.users/jch",
-		"text/plain", "", "*",
-		`hello, world!`)
-	if err != nil || resp.StatusCode != http.StatusUnsupportedMediaType {
-		t.Errorf("Create user (bad content-type): %v %v",
-			err, resp.StatusCode)
-	}
-
-	resp, err = do("PUT", "/galene-api/v0/.groups/test/.users/jch",
-		"application/json", "", "*",
-		`{"permissions": "present"}`)
-	if err != nil || resp.StatusCode != http.StatusCreated {
-		t.Errorf("Create user: %v %v", err, resp.StatusCode)
-	}
-
-	var users []string
-	err = getJSON("/galene-api/v0/.groups/test/.users/", &users)
-	if err != nil || len(users) != 1 || users[0] != "jch" {
-		t.Errorf("Get users: %v %v", err, users)
-	}
-
-	resp, err = do("PUT", "/galene-api/v0/.groups/test/.users/jch",
-		"application/json", "", "*",
-		`{"permissions": "present"}`)
-	if err != nil || resp.StatusCode != http.StatusPreconditionFailed {
-		t.Errorf("Create user (bad ETag): %v %v", err, resp.StatusCode)
-	}
-
-	resp, err = do("PUT", "/galene-api/v0/.groups/test/.users/jch/.password",
-		"application/json", "", "",
-		`"toto"`)
-	if err != nil || resp.StatusCode != http.StatusNoContent {
-		t.Errorf("Set password (PUT): %v %v", err, resp.StatusCode)
-	}
-
-	resp, err = do("POST", "/galene-api/v0/.groups/test/.users/jch/.password",
-		"text/plain", "", "",
-		`toto`)
-	if err != nil || resp.StatusCode != http.StatusNoContent {
-		t.Errorf("Set password (POST): %v %v", err, resp.StatusCode)
-	}
-
-	var user group.UserDescription
-	err = getJSON("/galene-api/v0/.groups/test/.users/jch", &user)
+	var res T
+	err = json.Unmarshal(resBody, &res)
 	if err != nil {
-		t.Errorf("Get user: %v", err)
+		return status, nil, err
 	}
-	if user.Password.Type != "" && user.Password.Key != nil {
-		t.Errorf("User not sanitised properly")
-	}
+	return status, &res, nil
+}
 
-	desc, err = group.GetDescription("test")
+func TestStats(t *testing.T) {
+	dir := t.TempDir()
+	datadir := t.TempDir()
+	err := setupTest(dir, datadir)
 	if err != nil {
-		t.Errorf("GetDescription: %v", err)
+		t.Fatalf("setupTest: %v", err)
 	}
 
-	if len(desc.Users) != 1 {
-		t.Errorf("Users: %#v", desc.Users)
-	}
-
-	if desc.Users["jch"].Password.Type != "bcrypt" {
-		t.Errorf("Password.Type: %v", desc.Users["jch"].Password.Type)
-	}
-
-	resp, err = do("DELETE", "/galene-api/v0/.groups/test/.users/jch",
-		"", "", "", "")
-	if err != nil || resp.StatusCode != http.StatusNoContent {
-		t.Errorf("Delete group: %v %v", err, resp.StatusCode)
-	}
-
-	desc, err = group.GetDescription("test")
+	code, bytes, err := query("GET", "/galene-api/v0/.stats", "", "")
 	if err != nil {
-		t.Errorf("GetDescription: %v", err)
+		t.Fatalf("query: %v", err)
 	}
-
-	if len(desc.Users) != 0 {
-		t.Errorf("Users (after delete): %#v", desc.Users)
+	if code != 200 {
+		t.Errorf("Stats: code is %v", code)
 	}
-
-	resp, err = do("PUT", "/galene-api/v0/.groups/test/.wildcard-user",
-		"application/json", "", "*",
-		`{"permissions": "present"}`)
-	if err != nil || resp.StatusCode != http.StatusCreated {
-		t.Errorf("Create wildcard user: %v %v", err, resp.StatusCode)
+	if len(bytes) == 0 {
+		t.Errorf("Stats: body is empty")
 	}
+}
 
-	err = getJSON("/galene-api/v0/.groups/test/.wildcard-user", &user)
+func TestUsers(t *testing.T) {
+	dir := t.TempDir()
+	datadir := t.TempDir()
+	err := setupTest(dir, datadir)
 	if err != nil {
-		t.Errorf("Get wildcard user: %v", err)
+		t.Fatalf("setupTest: %v", err)
 	}
 
-	desc, err = group.GetDescription("test")
+	code, bytes, err := query("GET", "/galene-api/v0/.users", "", "")
 	if err != nil {
-		t.Errorf("GetDescription: %v", err)
+		t.Fatalf("query: %v", err)
+	}
+	if code != 401 {
+		t.Errorf("Users: unauthenticated access got %v", code)
 	}
 
-	if !reflect.DeepEqual(user, *desc.WildcardUser) {
-		t.Errorf("Got %v, expected %v", desc.WildcardUser, user)
-	}
-
-	resp, err = do("DELETE", "/galene-api/v0/.groups/test/.wildcard-user",
-		"", "", "", "")
-	if err != nil || resp.StatusCode != http.StatusNoContent {
-		t.Errorf("Delete wildcard user: %v %v", err, resp.StatusCode)
-	}
-
-	desc, err = group.GetDescription("test")
+	code, users, err := queryJSON[[]group.UserDescription](
+		"GET", "/galene-api/v0/.users", "Basic YWRtaW46c2VjcmV0", "",
+	)
 	if err != nil {
-		t.Errorf("GetDescription: %v", err)
+		t.Fatalf("query: %v", err)
 	}
-
-	if desc.WildcardUser != nil {
-		t.Errorf("Got %v, expected nil", desc.WildcardUser)
+	if code != 200 {
+		t.Errorf("Users: got %v", code)
 	}
-
-	if len(desc.AuthKeys) != 1 {
-		t.Errorf("Keys: %v", len(desc.AuthKeys))
+	if len(*users) != 2 {
+		t.Errorf("Users: got %v", *users)
 	}
+}
 
-	resp, err = do("POST", "/galene-api/v0/.groups/test/.tokens/",
-		"application/json", "", "", `{"group":"bad"}`)
-	if err != nil || resp.StatusCode != http.StatusBadRequest {
-		t.Errorf("Create token (bad group): %v %v", err, resp.StatusCode)
-	}
-
-	resp, err = do("POST", "/galene-api/v0/.groups/test/.tokens/",
-		"application/json", "", "", "{}")
-	if err != nil || resp.StatusCode != http.StatusCreated {
-		t.Errorf("Create token: %v %v", err, resp.StatusCode)
-	}
-
-	resp, err = do("POST", "/galene-api/v0/.groups/.tokens/",
-		"application/json", "", "", "{\"includeSubgroups\": true}")
-	if err != nil || resp.StatusCode != http.StatusCreated {
-		t.Errorf("Create global token: %v %v", err, resp.StatusCode)
-	}
-
-	var toknames []string
-	err = getJSON("/galene-api/v0/.groups/test/.tokens/", &toknames)
-	if err != nil || len(toknames) != 1 {
-		t.Errorf("Get tokens: %v %v", err, toknames)
-	}
-	tokname := toknames[0]
-
-	var globalToknames []string
-	err = getJSON("/galene-api/v0/.groups/test/.tokens/", &globalToknames)
-	if err != nil || len(globalToknames) != 1 {
-		t.Errorf("Get global tokens: %v %v", err, globalToknames)
-	}
-
-	tokens, etag, err := token.List("test")
-	if err != nil || len(tokens) != 1 || tokens[0].Token != tokname {
-		t.Errorf("token.List: %v %v", tokens, err)
-	}
-
-	tokenpath := "/galene-api/v0/.groups/test/.tokens/" + tokname
-	var tok token.Stateful
-	err = getJSON(tokenpath, &tok)
+func TestToken(t *testing.T) {
+	dir := t.TempDir()
+	datadir := t.TempDir()
+	err := setupTest(dir, datadir)
 	if err != nil {
-		t.Errorf("Get token: %v %v", err, resp.StatusCode)
+		t.Fatalf("setupTest: %v", err)
 	}
 
-	if tok.Token != "" || tok.Group != "" {
-		t.Errorf("Get token: %v %v", tok.Token, tok.Group)
+	code, bytes, err := query("GET", "/galene-api/v0/.tokens/", "", "")
+	if err != nil {
+		t.Fatalf("query: %v", err)
+	}
+	if code != 401 {
+		t.Errorf("Tokens: unauthenticated access got %v", code)
 	}
 
-	e := time.Now().Add(time.Hour)
-	tok.Expires = &e
-	resp, err = do("PUT", tokenpath,
-		"application/json", etag, "", marshalToString(tok))
-	if err != nil || resp.StatusCode != http.StatusNoContent {
-		t.Errorf("Update token: %v %v", err, resp.StatusCode)
+	code, bytes, err = query("GET", "/galene-api/v0/.tokens/",
+		"Basic b3A6c2VjcmV0", "")
+	if err != nil {
+		t.Fatalf("query: %v", err)
+	}
+	if code != 401 {
+		t.Errorf("Tokens: non-admin access got %v", code)
 	}
 
-	tok.Token = tokens[0].Token
-	resp, err = do("PUT", tokenpath,
-		"application/json", "", "", marshalToString(tok))
-	if err != nil || resp.StatusCode != http.StatusBadRequest {
-		t.Errorf("Update token with name: %v %v", err, resp.StatusCode)
+	code, tokens, err := queryJSON[[]tokenEntry](
+		"GET", "/galene-api/v0/.tokens/",
+		"Basic YWRtaW46c2VjcmV0", "",
+	)
+	if err != nil {
+		t.Fatalf("query: %v", err)
+	}
+	if code != 200 {
+		t.Errorf("Tokens: got %v", code)
+	}
+	if len(*tokens) != 0 {
+		t.Errorf("Tokens: got %v", *tokens)
 	}
 
-	tok.Token = ""
-	tok.Group = "test"
-	resp, err = do("PUT", tokenpath,
-		"application/json", "", "", marshalToString(tok))
-	if err != nil || resp.StatusCode != http.StatusBadRequest {
-		t.Errorf("Update token with group: %v %v", err, resp.StatusCode)
+	var tok tokenEntry
+	code, tok2, err := queryJSON[tokenEntry](
+		"POST", "/galene-api/v0/.tokens/",
+		"Basic YWRtaW46c2VjcmV0",
+		`{"group": "public", "permissions": "present"}`,
+	)
+	if err != nil {
+		t.Fatalf("query: %v", err)
+	}
+	if code != 201 {
+		t.Errorf("Tokens: got %v", code)
+	}
+	tok = *tok2
+
+	code, tokens, err = queryJSON[[]tokenEntry](
+		"GET", "/galene-api/v0/.tokens/",
+		"Basic YWRtaW46c2VjcmV0", "",
+	)
+	if err != nil {
+		t.Fatalf("query: %v", err)
+	}
+	if code != 200 {
+		t.Errorf("Tokens: got %v", code)
+	}
+	if len(*tokens) != 1 || (*tokens)[0].Id != tok.Id {
+		t.Errorf("Tokens: got %v, expected %v", *tokens, tok)
 	}
 
-	err = getJSON(tokenpath, &tok)
-	if err != nil || !tok.Expires.Equal(e) {
-		t.Errorf("Got %v, expected %v (%v)", tok.Expires, e, err)
+	code, tok2, err = queryJSON[tokenEntry](
+		"GET", "/galene-api/v0/.tokens/"+tok.Id,
+		"Basic YWRtaW46c2VjcmV0", "",
+	)
+	if err != nil {
+		t.Fatalf("query: %v", err)
+	}
+	if code != 200 {
+		t.Errorf("Tokens: got %v", code)
+	}
+	if tok2.Id != tok.Id || tok2.Group != tok.Group {
+		t.Errorf("Tokens: got %v, expected %v", tok2, tok)
 	}
 
-	resp, err = do("PUT", "/galene-api/v0/.groups/test2",
-		"application/json", "", "*", "{}")
-	if err != nil || resp.StatusCode != http.StatusCreated {
-		t.Errorf("Create test2: %v %v", err, resp.StatusCode)
+	code, bytes, err = query("DELETE", "/galene-api/v0/.tokens/"+tok.Id,
+		"Basic YWRtaW46c2VjcmV0", "")
+	if err != nil {
+		t.Fatalf("query: %v", err)
+	}
+	if code != 204 {
+		t.Errorf("Tokens: got %v", code)
 	}
 
-	tokenpath2 := "/galene-api/v0/.groups/test2/.tokens/" + tokname
-	resp, err = do("GET", tokenpath2, "", "", "", "")
-	if err != nil || resp.StatusCode != http.StatusNotFound {
-		t.Errorf("Get token in bad group: %v %v", err, resp.StatusCode)
+	code, bytes, err = query("GET", "/galene-api/v0/.tokens/"+tok.Id,
+		"Basic YWRtaW46c2VjcmV0", "")
+	if err != nil {
+		t.Fatalf("query: %v", err)
+	}
+	if code != 404 {
+		t.Errorf("Tokens: got %v", code)
+	}
+}
+
+func TestGroups(t *testing.T) {
+	dir := t.TempDir()
+	datadir := t.TempDir()
+	err := setupTest(dir, datadir)
+	if err != nil {
+		t.Fatalf("setupTest: %v", err)
 	}
 
-	resp, err = do("PUT", tokenpath2,
-		"application/json", "", "", "{}")
-	if err != nil || resp.StatusCode != http.StatusConflict {
-		t.Errorf("Put token in bad group: %v %v", err, resp.StatusCode)
+	g, err := group.Add("test", nil)
+	if err != nil {
+		t.Fatalf("group.Add: %v", err)
+	}
+	desc := g.Description()
+	desc.Public = true
+	err = group.SetDescription("test", desc)
+	if err != nil {
+		t.Fatalf("group.SetDescription: %v", err)
 	}
 
-	resp, err = do("DELETE", tokenpath, "", "", "", "")
-	if err != nil || resp.StatusCode != http.StatusNoContent {
-		t.Errorf("Update token: %v %v", err, resp.StatusCode)
+	code, groups, err := queryJSON[[]groupEntry](
+		"GET", "/galene-api/v0/.groups/", "", "",
+	)
+	if err != nil {
+		t.Fatalf("query: %v", err)
 	}
-	tokens, etag, err = token.List("test")
-	if err != nil || len(tokens) != 0 {
-		t.Errorf("Token list: %v %v", tokens, err)
+	if code != 200 {
+		t.Errorf("Groups: got %v", code)
 	}
-
-	resp, err = do("DELETE", "/galene-api/v0/.groups/test/.keys",
-		"", "", "", "")
-	if err != nil || resp.StatusCode != http.StatusNoContent {
-		t.Errorf("Delete keys: %v %v", err, resp.StatusCode)
+	if len(*groups) != 1 || (*groups)[0].Name != "test" {
+		t.Errorf("Groups: got %v", *groups)
 	}
 
-	resp, err = do("DELETE", "/galene-api/v0/.groups/test/",
-		"", "", "", "")
-	if err != nil || resp.StatusCode != http.StatusNoContent {
-		t.Errorf("Delete group: %v %v", err, resp.StatusCode)
+	code, group, err := queryJSON[groupEntry](
+		"GET", "/galene-api/v0/.groups/test", "", "",
+	)
+	if err != nil {
+		t.Fatalf("query: %v", err)
+	}
+	if code != 200 {
+		t.Errorf("Groups: got %v", code)
+	}
+	if group.Name != "test" {
+		t.Errorf("Groups: got %v", group)
 	}
 
-	_, err = group.GetDescription("test")
+	code, bytes, err := query("DELETE", "/galene-api/v0/.groups/test", "", "")
+	if err != nil {
+		t.Fatalf("query: %v", err)
+	}
+	if code != 401 {
+		t.Errorf("Groups: unauthenticated access got %v", code)
+	}
+
+	code, bytes, err = query("DELETE", "/galene-api/v0/.groups/test",
+		"Basic YWRtaW46c2VjcmV0", "")
+	if err != nil {
+		t.Fatalf("query: %v", err)
+	}
+	if code != 204 {
+		t.Errorf("Groups: got %v", code)
+	}
+
+	code, bytes, err = query("GET", "/galene-api/v0/.groups/test", "", "")
+	if err != nil {
+		t.Fatalf("query: %v", err)
+	}
+	if code != 404 {
+		t.Errorf("Groups: got %v", code)
+	}
+}
+
+func TestGalenectl(t *testing.T) {
+	dir := t.TempDir()
+	datadir := t.TempDir()
+	err := setupTest(dir, datadir)
+	if err != nil {
+		t.Fatalf("setupTest: %v", err)
+	}
+
+	var conf group.GalenectlConfig
+	code, confp, err := queryJSON[group.GalenectlConfig](
+		"GET", "/galene-api/v0/.galenectl", "Basic YWRtaW46c2VjcmV0", "",
+	)
+	if err != nil {
+		t.Fatalf("query: %v", err)
+	}
+	if code != 200 {
+		t.Fatalf("Galenectl: got %v", code)
+	}
+	conf = *confp
+
+	if conf.URL != "http://localhost:1234/galene-api/v0/" {
+		t.Errorf("Galenectl: url is %v", conf.URL)
+	}
+	if conf.Username != "admin" || conf.Password != "secret" {
+		t.Errorf("Galenectl: user is %v, pass is %v",
+			conf.Username, conf.Password)
+	}
+
+	code, confp, err = queryJSON[group.GalenectlConfig](
+		"GET", "/galene-api/v0/.galenectl", "Basic b3A6c2VjcmV0", "",
+	)
+	if err != nil {
+		t.Fatalf("query: %v", err)
+	}
+	if code != 401 {
+		t.Fatalf("Galenectl: non-admin got %v", code)
+	}
+
+	code, confp, err = queryJSON[group.GalenectlConfig](
+		"GET", "/galene-api/v0/.galenectl", "", "",
+	)
+	if err != nil {
+		t.Fatalf("query: %v", err)
+	}
+	if code != 401 {
+		t.Fatalf("Galenectl: unauthenticated got %v", code)
+	}
+}
+
+func TestRecordings(t *testing.T) {
+	dir := t.TempDir()
+	datadir := t.TempDir()
+	err := setupTest(dir, datadir)
+	if err != nil {
+		t.Fatalf("setupTest: %v", err)
+	}
+
+	code, bytes, err := query("GET", "/recordings/public", "", "")
+	if err != nil {
+		t.Fatalf("query: %v", err)
+	}
+	if code != 308 {
+		t.Errorf("Recordings: got %v, expected 308", code)
+	}
+
+	code, bytes, err = query("GET", "/recordings/public/", "", "")
+	if err != nil {
+		t.Fatalf("query: %v", err)
+	}
+	if code != 401 {
+		t.Errorf("Recordings: got %v, expected 401", code)
+	}
+
+	code, bytes, err = query("GET", "/recordings/public/", "Basic YWRtaW46c2VjcmV0", "")
+	if err != nil {
+		t.Fatalf("query: %v", err)
+	}
+	if code != 404 {
+		t.Errorf("Recordings: got %v, expected 404", code)
+	}
+
+	recdir := filepath.Join(diskwriter.Directory, "public")
+	err = os.MkdirAll(recdir, 0700)
+	if err != nil {
+		t.Fatalf("MkdirAll: %v", err)
+	}
+
+	code, bytes, err = query("GET", "/recordings/public/", "Basic YWRtaW46c2VjcmV0", "")
+	if err != nil {
+		t.Fatalf("query: %v", err)
+	}
+	if code != 200 {
+		t.Errorf("Recordings: got %v, expected 200", code)
+	}
+
+	code, bytes, err = query("GET", "/recordings/public/foo", "Basic YWRtaW46c2VjcmV0", "")
+	if err != nil {
+		t.Fatalf("query: %v", err)
+	}
+	if code != 404 {
+		t.Errorf("Recordings: got %v, expected 404", code)
+	}
+
+	err = os.WriteFile(filepath.Join(recdir, "foo"), []byte("123"), 0600)
+	if err != nil {
+		t.Fatalf("WriteFile: %v", err)
+	}
+
+	code, bytes, err = query("GET", "/recordings/public/foo", "Basic YWRtaW46c2VjcmV0", "")
+	if err != nil {
+		t.Fatalf("query: %v", err)
+	}
+	if code != 200 {
+		t.Errorf("Recordings: got %v, expected 200", code)
+	}
+	if string(bytes) != "123" {
+		t.Errorf("Recordings: got %v, expected 123", bytes)
+	}
+
+	code, bytes, err = query("POST", "/recordings/public/?q=delete&filename=foo", "Basic YWRtaW46c2VjcmV0", "")
+	if err != nil {
+		t.Fatalf("query: %v", err)
+	}
+	if code != 303 {
+		t.Errorf("Recordings: got %v, expected 303", code)
+	}
+
+	_, err = os.Stat(filepath.Join(recdir, "foo"))
 	if !errors.Is(err, os.ErrNotExist) {
-		t.Errorf("Group exists after delete")
+		t.Errorf("Recordings: foo was not deleted: %v", err)
 	}
-}
-
-func TestApiBadAuth(t *testing.T) {
-	err := setupTest(t.TempDir(), t.TempDir())
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	client := http.Client{}
-
-	do := func(method, path string) {
-		req, err := http.NewRequest(method,
-			"http://localhost:1234"+path,
-			nil)
-		if err != nil {
-			t.Errorf("New request: %v", err)
-			return
-		}
-		req.SetBasicAuth("root", "badpw")
-		resp, err := client.Do(req)
-		if err != nil {
-			t.Errorf("%v %v: %v", method, path, err)
-			return
-		}
-		if resp.StatusCode != http.StatusUnauthorized {
-			t.Errorf("%v %v: %v", method, path, resp.StatusCode)
-		}
-	}
-
-	do("GET", "/galene-api/v0/.stats")
-	do("GET", "/galene-api/v0/.groups/")
-	do("PUT", "/galene-api/v0/.groups/test/")
-
-	f, err := os.Create(filepath.Join(group.Directory, "test.json"))
-	if err != nil {
-		t.Fatalf("Create(test.json): %v", err)
-	}
-	f.WriteString(`{
-            "users": {"jch": {"permissions": "present", "password": "pw"}}
-        }\n`)
-	f.Close()
-
-	do("PUT", "/galene-api/v0/.groups/test/")
-	do("DELETE", "/galene-api/v0/.groups/test/")
-	do("GET", "/galene-api/v0/.groups/test/.users/")
-	do("GET", "/galene-api/v0/.groups/test/.users/jch")
-	do("GET", "/galene-api/v0/.groups/test/.users/jch")
-	do("PUT", "/galene-api/v0/.groups/test/.users/jch")
-	do("DELETE", "/galene-api/v0/.groups/test/.users/jch")
-	do("GET", "/galene-api/v0/.groups/test/.users/not-jch")
-	do("PUT", "/galene-api/v0/.groups/test/.users/not-jch")
-	do("PUT", "/galene-api/v0/.groups/test/.users/jch/.password")
-	do("POST", "/galene-api/v0/.groups/test/.users/jch/.password")
-	do("GET", "/galene-api/v0/.groups/test/.tokens/")
-	do("POST", "/galene-api/v0/.groups/test/.tokens/")
-	do("GET", "/galene-api/v0/.groups/test/.tokens/token")
-	do("PUT", "/galene-api/v0/.groups/test/.tokens/token")
-	do("DELETE", "/galene-api/v0/.groups/test/.tokens/token")
 }

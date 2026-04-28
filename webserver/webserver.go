@@ -29,18 +29,12 @@ import (
 
 var server *http.Server
 
-var StaticRoot string
-var staticRoot *os.Root
+var Static http.FileSystem
 
 var Insecure bool
 
 func Serve(address string, dataDir string) error {
-	var err error
-	staticRoot, err = os.OpenRoot(StaticRoot)
-	if err != nil {
-		return err
-	}
-	http.Handle("/", &fileHandler{staticRoot})
+	http.Handle("/", &fileHandler{Static})
 	http.HandleFunc("/group/", groupHandler)
 	http.HandleFunc("/recordings",
 		func(w http.ResponseWriter, r *http.Request) {
@@ -114,7 +108,7 @@ func notFound(w http.ResponseWriter) {
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	w.WriteHeader(http.StatusNotFound)
 
-	f, err := staticRoot.Open("404.html")
+	f, err := Static.Open("/404.html")
 	if err != nil {
 		fmt.Fprintln(w, "<p>Not found</p>")
 		return
@@ -137,7 +131,8 @@ func httpError(w http.ResponseWriter, err error) {
 		return
 	}
 	if errors.Is(err, group.ErrUnknownPermission) {
-		http.Error(w, "unknown permission", http.StatusBadRequest)
+		thttpError := http.StatusBadRequest
+		http.Error(w, "unknown permission", thttpError)
 		return
 	}
 	var autherr *group.NotAuthorisedError
@@ -202,7 +197,7 @@ func makeCachable(w http.ResponseWriter, p string, fi os.FileInfo, cachable bool
 
 // fileHandler is our custom reimplementation of http.FileServer
 type fileHandler struct {
-	root *os.Root
+	root http.FileSystem
 }
 
 func (fh *fileHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
@@ -211,17 +206,13 @@ func (fh *fileHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 
 	cspHeader(w, "")
-	if !strings.HasPrefix(r.URL.Path, "/") {
-		http.Error(w,
-			"internal server error", http.StatusInternalServerError)
-		return
+	p := r.URL.Path
+	// this ensures any leading .. are removed by path.Clean below
+	if !strings.HasPrefix(p, "/") {
+		p = "/" + p
+		r.URL.Path = p
 	}
-	var p string
-	if r.URL.Path == "/" {
-		p = "."
-	} else {
-		p = r.URL.Path[1:]
-	}
+	p = path.Clean(p)
 
 	f, err := fh.root.Open(p)
 	if err != nil {
@@ -273,8 +264,8 @@ func (fh *fileHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 // serveFile is similar to http.ServeFile, except that it doesn't check
 // for .. and adds cachability headers.
-func serveFile(w http.ResponseWriter, r *http.Request, root *os.Root, p string) {
-	f, err := root.Open(p)
+func serveFile(w http.ResponseWriter, r *http.Request, p string) {
+	f, err := Static.Open(p)
 	if err != nil {
 		httpError(w, err)
 		return
@@ -381,7 +372,7 @@ func groupHandler(w http.ResponseWriter, r *http.Request) {
 
 	status := g.Status(false, nil)
 	cspHeader(w, status.AuthServer)
-	serveFile(w, r, staticRoot, "galene.html")
+	serveFile(w, r, "/galene.html")
 }
 
 func baseURL(r *http.Request) (*url.URL, error) {
@@ -397,43 +388,40 @@ func baseURL(r *http.Request) (*url.URL, error) {
 		}
 	}
 	scheme := "https"
-	if r.TLS == nil {
+	if Insecure {
 		scheme = "http"
 	}
+	if pu != nil && pu.Scheme != "" {
+		scheme = pu.Scheme
+	}
+
 	host := r.Host
-	path := ""
-	if pu != nil {
-		if pu.Scheme != "" {
-			scheme = pu.Scheme
-		}
-		if pu.Host != "" {
-			host = pu.Host
-		}
-		path = pu.Path
+	if pu != nil && pu.Host != "" {
+		host = pu.Host
 	}
-	base := url.URL{
-		Scheme: scheme,
-		Host:   host,
-		Path:   path,
+
+	p := "/"
+	if pu != nil && pu.Path != "" {
+		p = pu.Path
 	}
-	return &base, nil
+
+	return url.Parse(scheme + "://" + host + p)
 }
 
 func groupStatusHandler(w http.ResponseWriter, r *http.Request) {
-	pth, kind, rest := splitPath(r.URL.Path)
-	if kind != ".status" || rest != "" {
-		internalError(w, "groupStatusHandler: this shouldn't happen")
+	if redirect(w, r) {
 		return
 	}
-	name := parseGroupName("/group/", pth)
+
+	name := parseGroupName("/group/", r.URL.Path)
 	if name == "" {
 		notFound(w)
 		return
 	}
 
-	g, err := group.Add(name, nil)
-	if err != nil {
-		httpError(w, err)
+	g := group.Get(name)
+	if g == "" {
+		notFound(w)
 		return
 	}
 

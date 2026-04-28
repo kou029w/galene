@@ -6,6 +6,7 @@ Galene 1.2 (unreleased)
 
 21 June 2026: Galene 1.1
 
+  * Embed static assets into binary.
   * Implemented "galenectl initial-setup".
   * Implemented global tokens.
   * Added options "-unrestricted-tokens" and "-auto-subgroups" to
