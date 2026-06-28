@@ -1,0 +1,11 @@
+.*
+*~
+*.md
+CHANGES
+LICENCE
+
+/galene
+/galenectl/galenectl
+/data/
+/groups/
+/recordings/
