@@ -18,7 +18,7 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 // THE SOFTWARE.
 
-'use strict';
+"use strict";
 
 /**
  * @typedef {Object} filterDefinition
@@ -35,119 +35,105 @@
  * @constructor
  */
 function Filter(stream, definition) {
-    /** @ts-ignore */
-    if(!HTMLCanvasElement.prototype.captureStream) {
-        throw new Error('Filters are not supported on this platform');
-    }
+  /** @ts-ignore */
+  if (!HTMLCanvasElement.prototype.captureStream) {
+    throw new Error("この環境ではフィルターに対応していません");
+  }
 
-    /** @type {MediaStream} */
-    this.inputStream = stream;
-    /** @type {filterDefinition} */
-    this.definition = definition;
-    /** @type {number} */
-    this.frameRate = 30;
-    /** @type {HTMLVideoElement} */
-    this.video = document.createElement('video');
-    /** @type {HTMLCanvasElement} */
-    this.canvas = document.createElement('canvas');
-    /** @type {CanvasRenderingContext2D} */
-    this.context = this.canvas.getContext('2d');
-    /** @type {MediaStream} */
-    this.outputStream = null;
-    /** @type {number} */
-    this.timer = null;
-    /** @type {number} */
-    this.count = 0;
-    /** @type {boolean} */
-    this.fixedFramerate = false;
-    /** @type {Record<string,any>} */
-    this.userdata = {}
-    /** @type {MediaStream} */
-    this.captureStream = this.canvas.captureStream(0);
-    /** @type {boolean} */
-    this.busy = false;
+  /** @type {MediaStream} */
+  this.inputStream = stream;
+  /** @type {filterDefinition} */
+  this.definition = definition;
+  /** @type {number} */
+  this.frameRate = 30;
+  /** @type {HTMLVideoElement} */
+  this.video = document.createElement("video");
+  /** @type {HTMLCanvasElement} */
+  this.canvas = document.createElement("canvas");
+  /** @type {CanvasRenderingContext2D} */
+  this.context = this.canvas.getContext("2d");
+  /** @type {MediaStream} */
+  this.outputStream = null;
+  /** @type {number} */
+  this.timer = null;
+  /** @type {number} */
+  this.count = 0;
+  /** @type {any} */
+  this.userdata = {};
 }
 
-Filter.prototype.start = async function() {
-    /** @ts-ignore */
-    if(!this.captureStream.getTracks()[0].requestFrame) {
-        console.warn('captureFrame not supported, using fixed framerate');
-        /** @ts-ignore */
-        this.captureStream = this.canvas.captureStream(this.frameRate);
-        this.fixedFramerate = true;
-    }
+/**
+ * Starts filtering.
+ */
+Filter.prototype.start = async function () {
+  if (this.timer) throw new Error("すでに動作しています");
 
-    this.outputStream = new MediaStream();
-    this.outputStream.addTrack(this.captureStream.getTracks()[0]);
-    this.inputStream.getTracks().forEach(t => {
-        t.onended = e => this.stop();
-        if(t.kind !== 'video')
-            this.outputStream.addTrack(t);
-    });
-    this.video.srcObject = this.inputStream;
-    this.video.muted = true;
-    this.video.play();
-    if(this.definition.init)
-        await this.definition.init.call(this);
-    this.timer = setInterval(() => this.draw(), 1000 / this.frameRate);
-}
+  this.video.srcObject = this.inputStream;
+  this.video.muted = true;
+  let p = this.video.play();
 
-Filter.prototype.draw = async function() {
-    if(this.video.videoWidth === 0 && this.video.videoHeight === 0) {
-        // video not started yet
-        return;
-    }
+  /** @ts-ignore */
+  this.outputStream = this.canvas.captureStream(this.frameRate);
+  let tracks = this.inputStream.getAudioTracks();
+  for (let i = 0; i < tracks.length; i++) {
+    this.outputStream.addTrack(tracks[i]);
+  }
 
-    // check framerate every 30 frames
-    if((this.count % 30) === 0) {
-        let frameRate = 0;
-        this.inputStream.getTracks().forEach(t => {
-            if(t.kind === 'video') {
-                let r = t.getSettings().frameRate;
-                if(r)
-                    frameRate = r;
-            }
-        });
-        if(frameRate && frameRate !== this.frameRate) {
-            clearInterval(this.timer);
-            this.frameRate = frameRate;
-            this.timer = setInterval(() => this.draw(), 1000 / this.frameRate);
-        }
-    }
+  if (this.definition.init) await this.definition.init.call(this);
 
-    if(this.busy) {
-        // drop frame
-        return;
-    }
+  let filter = this;
 
-    try {
-        this.busy = true;
-        let ok = false;
-        try {
-            ok = await this.definition.draw.call(
-                this, this.video, this.context,
-            );
-        } catch(e) {
-            console.error(e);
-        }
-        if(ok && !this.fixedFramerate) {
-            /** @ts-ignore */
-            this.captureStream.getTracks()[0].requestFrame();
-        }
-        this.count++;
-    } finally {
-        this.busy = false;
+  /**
+   * @param {DOMHighResTimeStamp} now
+   */
+  async function step(now) {
+    if (!filter.timer) return;
+
+    if (!filter.video.paused && !filter.video.ended) {
+      let done = false;
+      try {
+        done = await filter.definition.draw.call(
+          filter,
+          filter.video,
+          filter.context,
+        );
+      } catch (e) {
+        console.error(e);
+      }
+      if (!done) {
+        filter.context.clearRect(
+          0,
+          0,
+          filter.canvas.width,
+          filter.canvas.height,
+        );
+      }
     }
+    if (filter.timer) filter.timer = requestAnimationFrame(step);
+  }
+
+  this.timer = requestAnimationFrame(step);
+  await p;
 };
 
-Filter.prototype.stop = async function() {
-    if(!this.timer)
-        return;
-    this.captureStream.getTracks()[0].stop();
-    clearInterval(this.timer);
+/**
+ * Stops filtering and releases any resources.
+ */
+Filter.prototype.stop = async function () {
+  if (this.timer) {
+    cancelAnimationFrame(this.timer);
     this.timer = null;
-    if(this.definition.cleanup)
-        await this.definition.cleanup.call(this);
+  }
+  this.video.pause();
+  this.video.srcObject = null;
+  if (this.outputStream) {
+    let tracks = this.outputStream.getTracks();
+    for (let i = 0; i < tracks.length; i++) {
+      tracks[i].stop();
+    }
+    this.outputStream = null;
+  }
+  if (this.definition.cleanup) await this.definition.cleanup.call(this);
 };
 
 /**
@@ -156,16 +142,15 @@ Filter.prototype.stop = async function() {
  * @param {Stream} c
  */
 async function removeFilter(c) {
-    let old = c.userdata.filter;
-    if(!old)
-        return;
+  let old = c.userdata.filter;
+  if (!old) return;
 
-    if(!(old instanceof Filter))
-        throw new Error('userdata.filter is not a filter');
+  if (!(old instanceof Filter))
+    throw new Error("userdata.filter is not a filter");
 
-    c.setStream(old.inputStream);
-    await old.stop();
-    c.userdata.filter = null;
+  c.setStream(old.inputStream);
+  await old.stop();
+  c.userdata.filter = null;
 }
 
 /**
@@ -174,15 +159,14 @@ async function removeFilter(c) {
  * @param {Stream} c
  */
 async function setFilter(c) {
-    await removeFilter(c);
+  await removeFilter(c);
 
-    if(!c.userdata.filterDefinition)
-        return;
+  if (!c.userdata.filterDefinition) return;
 
-    let filter = new Filter(c.stream, c.userdata.filterDefinition);
-    await filter.start();
-    c.setStream(filter.outputStream);
-    c.userdata.filter = filter;
+  let filter = new Filter(c.stream, c.userdata.filterDefinition);
+  await filter.start();
+  c.setStream(filter.outputStream);
+  c.userdata.filter = filter;
 }
 
 /**
@@ -193,201 +177,215 @@ async function setFilter(c) {
  * @param {Transferable[]} [transfer]
  */
 async function workerSendReceive(worker, message, transfer) {
-    if(worker.onmessage)
-        throw new Error("worker busy");
-    let p = new Promise((resolve, reject) => {
-        worker.onmessage = e => {
-            if(e && e.data) {
-                if(e.data instanceof Error)
-                    reject(e.data);
-                else
-                    resolve(e.data);
-            } else {
-                resolve(null);
-            }
-        };
-    });
-    try {
-        worker.postMessage(message, transfer);
-        return await p
-    } finally {
-        worker.onmessage = null;
-    }
+  if (worker.onmessage) throw new Error("worker busy");
+  let p = new Promise((resolve, reject) => {
+    worker.onmessage = (e) => {
+      if (e && e.data) {
+        if (e.data instanceof Error) reject(e.data);
+        else resolve(e.data);
+      } else {
+        resolve(null);
+      }
+    };
+  });
+  try {
+    worker.postMessage(message, transfer);
+    return await p;
+  } finally {
+    worker.onmessage = null;
+  }
 }
 
 /**
  * @type {Record.<string,filterDefinition>}
  */
 let filters = {
-    'mirror-h': {
-        description: "Horizontal mirror",
-        draw: async function(src, ctx) {
-            if(!(ctx instanceof CanvasRenderingContext2D))
-                throw new Error('bad context type');
-            if(ctx.canvas.width !== src.videoWidth ||
-               ctx.canvas.height !== src.videoHeight) {
-                ctx.canvas.width = src.videoWidth;
-                ctx.canvas.height = src.videoHeight;
-            }
-            ctx.scale(-1, 1);
-            ctx.drawImage(src, -src.videoWidth, 0);
-            ctx.resetTransform();
-            return true;
-        },
+  "mirror-h": {
+    description: "左右反転",
+    draw: async function (src, ctx) {
+      if (!(ctx instanceof CanvasRenderingContext2D))
+        throw new Error("bad context type");
+      if (
+        ctx.canvas.width !== src.videoWidth ||
+        ctx.canvas.height !== src.videoHeight
+      ) {
+        ctx.canvas.width = src.videoWidth;
+        ctx.canvas.height = src.videoHeight;
+      }
+      ctx.scale(-1, 1);
+      ctx.drawImage(src, -src.videoWidth, 0);
+      ctx.resetTransform();
+      return true;
     },
-    'mirror-v': {
-        description: "Vertical mirror",
-        draw: async function(src, ctx) {
-            if(!(ctx instanceof CanvasRenderingContext2D))
-                throw new Error('bad context type');
-            if(ctx.canvas.width !== src.videoWidth ||
-               ctx.canvas.height !== src.videoHeight) {
-                ctx.canvas.width = src.videoWidth;
-                ctx.canvas.height = src.videoHeight;
-            }
-            ctx.scale(1, -1);
-            ctx.drawImage(src, 0, -src.videoHeight);
-            ctx.resetTransform();
-            return true;
-        },
+  },
+  "mirror-v": {
+    description: "上下反転",
+    draw: async function (src, ctx) {
+      if (!(ctx instanceof CanvasRenderingContext2D))
+        throw new Error("bad context type");
+      if (
+        ctx.canvas.width !== src.videoWidth ||
+        ctx.canvas.height !== src.videoHeight
+      ) {
+        ctx.canvas.width = src.videoWidth;
+        ctx.canvas.height = src.videoHeight;
+      }
+      ctx.scale(1, -1);
+      ctx.drawImage(src, 0, -src.videoHeight);
+      ctx.resetTransform();
+      return true;
     },
-    'rotate': {
-        description: 'Rotate',
-        draw: async function(src, ctx) {
-            if(!(ctx instanceof CanvasRenderingContext2D))
-                throw new Error('bad context type');
-            if(ctx.canvas.width !== src.videoWidth ||
-               ctx.canvas.height !== src.videoHeight) {
-                ctx.canvas.width = src.videoWidth;
-                ctx.canvas.height = src.videoHeight;
-            }
-            ctx.scale(-1, -1);
-            ctx.drawImage(src, -src.videoWidth, -src.videoHeight);
-            ctx.resetTransform();
-            return true;
-        },
+  },
+  rotate: {
+    description: "180度回転",
+    draw: async function (src, ctx) {
+      if (!(ctx instanceof CanvasRenderingContext2D))
+        throw new Error("bad context type");
+      if (
+        ctx.canvas.width !== src.videoWidth ||
+        ctx.canvas.height !== src.videoHeight
+      ) {
+        ctx.canvas.width = src.videoWidth;
+        ctx.canvas.height = src.videoHeight;
+      }
+      ctx.scale(-1, -1);
+      ctx.drawImage(src, -src.videoWidth, -src.videoHeight);
+      ctx.resetTransform();
+      return true;
     },
-    'background-blur': {
-        description: 'Background blur',
-        predicate: async function() {
-            let r = await fetch('/third-party/tasks-vision/vision_bundle.mjs', {
-                method: 'HEAD',
-            });
-            if(!r.ok) {
-                if(r.status !== 404)
-                    console.warn(
-                        `Fetch vision_bundle.mjs: ${r.status} ${r.statusText}`,
-                    );
-                return false;
-            }
-            return true;
-        },
-        init: async function() {
-            if(!(this instanceof Filter))
-                throw new Error('Bad type for this');
-            if(this.userdata.worker)
-                throw new Error("Worker already running (this shouldn't happen)")
-            this.userdata.worker = new Worker('/background-blur-worker.js');
-            await workerSendReceive(this.userdata.worker, {
-                model: '/third-party/tasks-vision/models/selfie_segmenter.tflite',
-            });
-        },
-        cleanup: async function() {
-            if(this.userdata.worker.onmessage) {
-                this.userdata.worker.onmessage(null);
-            }
-            this.userdata.worker.terminate();
-            this.userdata.worker = null;
-        },
-        draw: async function(src, ctx) {
-            let bitmap = await createImageBitmap(src);
-            try {
-                let result = await workerSendReceive(this.userdata.worker, {
-                    bitmap: bitmap,
-                    timestamp: performance.now(),
-                }, [bitmap]);
-
-                if(!result)
-                    return false;
-
-                let mask = result.mask;
-                bitmap = result.bitmap;
-
-                if(ctx.canvas.width !== src.videoWidth ||
-                   ctx.canvas.height !== src.videoHeight) {
-                    ctx.canvas.width = src.videoWidth;
-                    ctx.canvas.height = src.videoHeight;
-                }
-
-                // set the alpha mask, background is opaque
-                ctx.globalCompositeOperation = 'copy';
-                ctx.drawImage(mask, 0, 0);
-
-                // rather than blurring the original image, we first mask
-                // the background then blur, this avoids a halo effect
-                ctx.globalCompositeOperation = 'source-in';
-                ctx.drawImage(result.bitmap, 0, 0);
-		if('filter' in ctx) {
-                    ctx.globalCompositeOperation = 'copy';
-                    ctx.filter = `blur(${src.videoWidth / 48}px)`;
-                    ctx.drawImage(ctx.canvas, 0, 0);
-                    ctx.filter = 'none';
-		} else {
-		    // Safari bug 198416, context.filter is not supported.
-
-                    // Work around typescript inferring ctx as none
-                    ctx = /**@type{CanvasRenderingContext2D}*/(ctx);
-
-		    let scale = 24;
-		    let swidth = src.videoWidth / scale;
-		    let sheight = src.videoHeight / scale;
-		    if(!('canvas' in this.userdata))
-			this.userdata.canvas = document.createElement('canvas');
-                    /** @type {HTMLCanvasElement} */
-		    let c2 = this.userdata.canvas;
-		    if(c2.width !== swidth)
-			c2.width = swidth;
-		    if(c2.height !== sheight)
-			c2.height = sheight;
-		    let ctx2 = c2.getContext('2d');
-		    // scale down the background
-		    ctx2.globalCompositeOperation = 'copy';
-		    ctx2.drawImage(ctx.canvas,
-				   0, 0, src.videoWidth, src.videoHeight,
-				   0, 0, swidth, sheight,
-				  );
-		    // scale back up, composite atop the original background
-		    ctx.globalCompositeOperation = 'source-atop';
-		    ctx.drawImage(ctx2.canvas,
-				  0, 0,
-				  src.videoWidth / scale,
-				  src.videoHeight / scale,
-				  0, 0, src.videoWidth, src.videoHeight,
-				 );
-		}
-
-		// now draw the foreground
-                ctx.globalCompositeOperation = 'destination-atop';
-                ctx.drawImage(result.bitmap, 0, 0);
-                ctx.globalCompositeOperation = 'source-over';
-
-                mask.close();
-            } finally {
-                bitmap.close();
-            }
-            return true;
-        },
+  },
+  "background-blur": {
+    description: "背景ぼかし",
+    predicate: async function () {
+      let r = await fetch("/third-party/tasks-vision/vision_bundle.mjs", {
+        method: "HEAD",
+      });
+      if (!r.ok) {
+        if (r.status !== 404)
+          console.warn(`Fetch vision_bundle.mjs: ${r.status} ${r.statusText}`);
+        return false;
+      }
+      return true;
     },
+    init: async function () {
+      if (!(this instanceof Filter)) throw new Error("Bad type for this");
+      if (this.userdata.worker)
+        throw new Error("Worker already running (this shouldn't happen)");
+      this.userdata.worker = new Worker("/background-blur-worker.js");
+      await workerSendReceive(this.userdata.worker, {
+        model: "/third-party/tasks-vision/models/selfie_segmenter.tflite",
+      });
+    },
+    cleanup: async function () {
+      if (this.userdata.worker.onmessage) {
+        this.userdata.worker.onmessage(null);
+      }
+      this.userdata.worker.terminate();
+      this.userdata.worker = null;
+    },
+    draw: async function (src, ctx) {
+      let bitmap = await createImageBitmap(src);
+      try {
+        let result = await workerSendReceive(
+          this.userdata.worker,
+          {
+            bitmap: bitmap,
+            timestamp: performance.now(),
+          },
+          [bitmap],
+        );
+
+        if (!result) return false;
+
+        let mask = result.mask;
+        bitmap = result.bitmap;
+
+        if (
+          ctx.canvas.width !== src.videoWidth ||
+          ctx.canvas.height !== src.videoHeight
+        ) {
+          ctx.canvas.width = src.videoWidth;
+          ctx.canvas.height = src.videoHeight;
+        }
+
+        // set the alpha mask, background is opaque
+        ctx.globalCompositeOperation = "copy";
+        ctx.drawImage(mask, 0, 0);
+
+        // rather than blurring the original image, we first mask
+        // the background then blur, this avoids a halo effect
+        ctx.globalCompositeOperation = "source-in";
+        ctx.drawImage(result.bitmap, 0, 0);
+        if ("filter" in ctx) {
+          ctx.globalCompositeOperation = "copy";
+          ctx.filter = `blur(${src.videoWidth / 48}px)`;
+          ctx.drawImage(ctx.canvas, 0, 0);
+          ctx.filter = "none";
+        } else {
+          // Safari bug 198416, context.filter is not supported.
+
+          // Work around typescript inferring ctx as none
+          ctx = /**@type{CanvasRenderingContext2D}*/ (ctx);
+
+          let scale = 24;
+          let swidth = src.videoWidth / scale;
+          let sheight = src.videoHeight / scale;
+          if (!("canvas" in this.userdata))
+            this.userdata.canvas = document.createElement("canvas");
+          /** @type {HTMLCanvasElement} */
+          let c2 = this.userdata.canvas;
+          if (c2.width !== swidth) c2.width = swidth;
+          if (c2.height !== sheight) c2.height = sheight;
+          let ctx2 = c2.getContext("2d");
+          // scale down the background
+          ctx2.globalCompositeOperation = "copy";
+          ctx2.drawImage(
+            ctx.canvas,
+            0,
+            0,
+            src.videoWidth,
+            src.videoHeight,
+            0,
+            0,
+            swidth,
+            sheight,
+          );
+          // scale back up, composite atop the original background
+          ctx.globalCompositeOperation = "source-atop";
+          ctx.drawImage(
+            ctx2.canvas,
+            0,
+            0,
+            src.videoWidth / scale,
+            src.videoHeight / scale,
+            0,
+            0,
+            src.videoWidth,
+            src.videoHeight,
+          );
+        }
+
+        // now draw the foreground
+        ctx.globalCompositeOperation = "destination-atop";
+        ctx.drawImage(result.bitmap, 0, 0);
+        ctx.globalCompositeOperation = "source-over";
+
+        mask.close();
+      } finally {
+        bitmap.close();
+      }
+      return true;
+    },
+  },
 };
 
 async function addFilters() {
-    for(let name in filters) {
-        let f = filters[name];
-        if(f.predicate) {
-            if(!(await f.predicate.call(f)))
-                continue;
-        }
-        let d = f.description || name;
-        addSelectOption(getSelectElement('filterselect'), d, name);
+  for (let name in filters) {
+    let f = filters[name];
+    if (f.predicate) {
+      if (!(await f.predicate.call(f))) continue;
     }
+    let d = f.description || name;
+    addSelectOption(getSelectElement("filterselect"), d, name);
+  }
 }

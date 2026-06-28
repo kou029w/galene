@@ -775,8 +775,8 @@ func serveGroupRecordings(w http.ResponseWriter, r *http.Request, f *os.File, gr
 		return
 	}
 
-	fmt.Fprintf(w, "<!DOCTYPE html>\n<html><head>\n")
-	fmt.Fprintf(w, "<title>Recordings for group %v</title>\n", group)
+	fmt.Fprintf(w, "<!DOCTYPE html>\n<html lang=\"ja\" dir=\"ltr\"><head>\n")
+	fmt.Fprintf(w, "<title>グループ %v の録画一覧</title>\n", group)
 	fmt.Fprintf(w, "<link rel=\"stylesheet\" type=\"text/css\" href=\"/common.css\"/>")
 	fmt.Fprintf(w, "</head><body>\n")
 

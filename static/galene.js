@@ -601,7 +601,7 @@ document.getElementById('mutebutton').onclick = function(e) {
     e.preventDefault();
     let localMute = getSettings().localMute;
     if (localMute && !findUpMedia('camera')) {
-        displayMessage('Please use Enable to enable your camera or microphone.');
+        displayMessage('カメラまたはマイクを使うには「配信開始」を押してください。');
     } else {
         localMute = !localMute;
         setLocalMute(localMute, true);
@@ -921,13 +921,13 @@ async function setMediaChoices(done) {
         let label = d.label;
         if(d.kind === 'videoinput') {
             if(!label)
-                label = `Camera ${cn}`;
+                label = `カメラ ${cn}`;
             addSelectOption(getSelectElement('videoselect'),
                             label, d.deviceId);
             cn++;
         } else if(d.kind === 'audioinput') {
             if(!label)
-                label = `Microphone ${mn}`;
+                label = `マイク ${mn}`;
             addSelectOption(getSelectElement('audioselect'),
                             label, d.deviceId);
             mn++;
@@ -943,7 +943,7 @@ async function setMediaChoices(done) {
  */
 function newUpStream(localId) {
     if(!serverConnection)
-        throw new Error("Not connected");
+        throw new Error("接続されていません");
     let c = serverConnection.newUpStream(localId);
     c.onstatus = function(status) {
         setMediaStatus(c);
@@ -1312,7 +1312,7 @@ async function addLocalMedia(localId) {
         if(filter)
             c.userdata.filterDefinition = filter;
         else
-            displayWarning(`Unknown filter ${settings.filter}`);
+            displayWarning(`不明なフィルター ${settings.filter}`);
     }
 
     try {
@@ -1332,10 +1332,10 @@ async function addShareMedia() {
     if(!safariScreenshareDone) {
         if(isSafari()) {
             let ok = confirm(
-                'Screen sharing in Safari is broken.  ' +
-                    'It will work at first, ' +
-                    'but then your video will randomly freeze.  ' +
-                    'Are you sure that you wish to enable screensharing?'
+                'Safari での画面共有には不具合があります。' +
+                    '最初は動作しますが、' +
+                    'その後映像が突然フリーズすることがあります。' +
+                    '本当に画面共有を有効にしますか？'
             );
             if(!ok)
                 return
@@ -1347,7 +1347,7 @@ async function addShareMedia() {
     let stream = null;
     try {
         if(!('getDisplayMedia' in navigator.mediaDevices))
-            throw new Error('Your browser does not support screen sharing');
+            throw new Error('お使いのブラウザは画面共有に対応していません');
         stream = await navigator.mediaDevices.getDisplayMedia({
             video: true,
             audio: true,
@@ -1383,7 +1383,7 @@ async function addFileMedia(file) {
         /** @ts-ignore */
         stream = video.mozCaptureStream();
     else {
-        displayError("This browser doesn't support file playback");
+        displayError("このブラウザはファイルの再生に対応していません");
         return;
     }
 
@@ -1403,7 +1403,7 @@ async function addFileMedia(file) {
     let muted = getSettings().localMute;
     if(presenting && !muted) {
         setLocalMute(true, true);
-        displayWarning('You have been muted');
+        displayWarning('ミュートされました');
     }
 
     await setMedia(c, false, video);
@@ -1819,7 +1819,7 @@ function registerControlHandlers(localId, media, container) {
                 if(media.requestPictureInPicture) {
                     media.requestPictureInPicture();
                 } else {
-                    displayWarning('Picture in Picture not supported.');
+                    displayWarning('ピクチャー・イン・ピクチャーはサポートされていません。');
                 }
             };
         } else {
@@ -1841,7 +1841,7 @@ function registerControlHandlers(localId, media, container) {
                     /** @ts-ignore */
                     media.webkitRequestFullscreen();
                 } else {
-                    displayWarning('Full screen not supported!');
+                    displayWarning('全画面表示はサポートされていません。');
                 }
             };
         } else {
@@ -1898,9 +1898,9 @@ function setMediaStatus(c) {
 
     if(!c.up && state === 'failed') {
         let from = c.username ?
-            `from user ${c.username}` :
-            'from anonymous user';
-        displayWarning(`Cannot receive media ${from}, still trying...`);
+            `ユーザー ${c.username} からの` :
+            '匿名ユーザーからの';
+        displayWarning(`${from}メディアを受信できません。再試行しています…`);
     }
 }
 
@@ -1989,7 +1989,7 @@ function stringCompare(a, b) {
 function dateFromInput(v) {
     let d = new Date(v);
     if(d.toString() === 'Invalid Date')
-        throw new Error('Invalid date');
+        throw new Error('日付が不正です');
     return d;
 }
 
@@ -2006,7 +2006,7 @@ function inviteMenu() {
     let d = /** @type {HTMLDialogElement} */
         (document.getElementById('invite-dialog'));
     if(!('HTMLDialogElement' in window) || !d.showModal) {
-        displayError("This browser doesn't support modal dialogs");
+        displayError("このブラウザはモーダルダイアログに対応していません");
         return;
     }
     d.returnValue = '';
@@ -2041,7 +2041,7 @@ document.getElementById('invite-dialog').onclose = function(e) {
         try {
             notBefore = dateFromInput(nb.value);
         } catch(e) {
-            displayError(`Couldn't parse ${nb.value}: ${e.message}`);
+            displayError(`${nb.value} を読み取れませんでした: ${e.message}`);
             return;
         }
     }
@@ -2051,7 +2051,7 @@ document.getElementById('invite-dialog').onclose = function(e) {
         try {
             expires = dateFromInput(ex.value);
         } catch(e) {
-            displayError(`Couldn't parse ${ex.value}: ${e.message}`);
+            displayError(`${ex.value} を読み取れませんでした: ${e.message}`);
             return;
         }
     }
@@ -2079,47 +2079,47 @@ function userMenu(elt) {
     if(id === serverConnection.id) {
         let mydata = serverConnection.users[serverConnection.id].data;
         if(mydata['raisehand'])
-            items.push({label: 'Unraise hand', onClick: () => {
+            items.push({label: '挙手を下ろす', onClick: () => {
                 serverConnection.userAction(
                     'setdata', serverConnection.id, {'raisehand': null},
                 );
             }});
         else
-            items.push({label: 'Raise hand', onClick: () => {
+            items.push({label: '挙手', onClick: () => {
                 serverConnection.userAction(
                     'setdata', serverConnection.id, {'raisehand': true},
                 );
             }});
         if(serverConnection.version !== "1" &&
            serverConnection.permissions.indexOf('token') >= 0) {
-            items.push({label: 'Invite user', onClick: () => {
+            items.push({label: 'ユーザーを招待', onClick: () => {
                 inviteMenu();
             }});
         }
         if(serverConnection.permissions.indexOf('present') >= 0 && canFile())
-            items.push({label: 'Broadcast file', onClick: presentFile});
-        items.push({label: 'Restart media', onClick: renegotiateStreams});
+            items.push({label: 'ファイルを配信', onClick: presentFile});
+        items.push({label: 'メディアを再開', onClick: renegotiateStreams});
     } else {
-        items.push({label: 'Send file', onClick: () => {
+        items.push({label: 'ファイルを送信', onClick: () => {
             sendFile(id);
         }});
         if(serverConnection.permissions.indexOf('op') >= 0) {
             items.push({type: 'seperator'}); // sic
             if(user.permissions.indexOf('present') >= 0)
-                items.push({label: 'Forbid presenting', onClick: () => {
+                items.push({label: '配信を禁止', onClick: () => {
                     serverConnection.userAction('unpresent', id);
                 }});
             else
-                items.push({label: 'Allow presenting', onClick: () => {
+                items.push({label: '配信を許可', onClick: () => {
                     serverConnection.userAction('present', id);
                 }});
-            items.push({label: 'Mute', onClick: () => {
+            items.push({label: 'ミュート', onClick: () => {
                 serverConnection.userMessage('mute', id);
             }});
-            items.push({label: 'Kick out', onClick: () => {
+            items.push({label: '退出させる', onClick: () => {
                 serverConnection.userAction('kick', id);
             }});
-            items.push({label: 'Identify', onClick: () => {
+            items.push({label: '識別', onClick: () => {
                 serverConnection.userAction('identify', id);
             }});
         }
@@ -2194,7 +2194,7 @@ function changeUser(id, userinfo) {
  * @param {user} userinfo
  */
 function setUserStatus(id, elt, userinfo) {
-    elt.textContent = userinfo.username ? userinfo.username : '(anon)';
+    elt.textContent = userinfo.username ? userinfo.username : '(匿名)';
     if(userinfo.data.raisehand)
         elt.classList.add('user-status-raisehand');
     else
@@ -2261,11 +2261,11 @@ function displayUsername() {
     let present = serverConnection.permissions.indexOf('present') >= 0;
     let text = '';
     if(op && present)
-        text = '(op, presenter)';
+        text = '(管理者、配信者)';
     else if(op)
-        text = 'operator';
+        text = '管理者';
     else if(present)
-        text = 'presenter';
+        text = '配信者';
     document.getElementById('permspan').textContent = text;
 }
 
@@ -2338,7 +2338,7 @@ async function gotJoined(kind, group, perms, status, data, error, message) {
             setVisibility('passwordform', false);
         } else {
             token = null;
-            displayError('The server said: ' + message);
+            displayError('サーバーの応答: ' + message);
         }
         closeSafariStream();
         this.close();
@@ -2384,7 +2384,7 @@ async function gotJoined(kind, group, perms, status, data, error, message) {
         break;
     default:
         token = null;
-        displayError('Unknown join message');
+        displayError('不明な参加メッセージ');
         closeSafariStream();
         this.close();
         return;
@@ -2392,14 +2392,14 @@ async function gotJoined(kind, group, perms, status, data, error, message) {
 
     let input = /** @type{HTMLTextAreaElement} */
         (document.getElementById('input'));
-    input.placeholder = 'Type /help for help';
+    input.placeholder = 'ヘルプを見るには /help と入力してください';
     setTimeout(() => {input.placeholder = '';}, 8000);
 
     if(status.locked)
-        displayWarning('This group is locked');
+        displayWarning('このグループはロックされています');
 
     if(typeof RTCPeerConnection === 'undefined')
-        displayWarning("This browser doesn't support WebRTC");
+        displayWarning("このブラウザは WebRTC に対応していません");
     else
         this.request(mapRequest(getSettings().request));
 
@@ -2423,7 +2423,7 @@ async function gotJoined(kind, group, perms, status, data, error, message) {
             }
         } else {
             displayMessage(
-                "Press Enable to enable your camera or microphone"
+                "カメラまたはマイクを使うには「配信開始」を押してください。"
             );
         }
     }
@@ -2437,23 +2437,23 @@ function gotFileTransfer(f) {
     let p = document.createElement('p');
     if(f.up)
         p.textContent =
-        `We have offered to send a file called "${f.name}" ` +
-        `to user ${f.username}.`;
+        `ユーザー ${f.username} に「${f.name}」という` +
+        `ファイルの送信を申し出ました。`;
     else
         p.textContent =
-        `User ${f.username} offered to send us a file ` +
-        `called "${f.name}" of size ${f.size}.`
+        `ユーザー ${f.username} から「${f.name}」という` +
+        `サイズ ${f.size} のファイルの送信が申し出られました。`
     let bno = null, byes = null;
     if(!f.up) {
         byes = document.createElement('button');
-        byes.textContent = 'Accept';
+        byes.textContent = '承諾';
         byes.onclick = function(e) {
             f.receive();
         };
         byes.id = "byes-" + f.fullid();
     }
     bno = document.createElement('button');
-    bno.textContent = f.up ? 'Cancel' : 'Reject';
+    bno.textContent = f.up ? 'キャンセル' : '拒否';
     bno.onclick = function(e) {
         f.cancel();
     };
@@ -2462,7 +2462,7 @@ function gotFileTransfer(f) {
     status.id = 'status-' + f.fullid();
     if(!f.up) {
         status.textContent =
-            '(Choosing "Accept" will disclose your IP address.)';
+            '（「承諾」を選ぶと、あなたの IP アドレスが相手に開示されます。）';
     }
     let statusp = document.createElement('p');
     statusp.id = 'statusp-' + f.fullid();
@@ -2569,15 +2569,15 @@ function gotFileTransferEvent(state, data) {
         break;
     case 'connecting':
         delFileStatusButtons(f, true, false);
-        setFileStatus(f, 'Connecting...');
+        setFileStatus(f, '接続中…');
         createFileProgress(f, f.size);
         break;
     case 'connected':
-        setFileStatus(f, f.up ? 'Sending...' : 'Receiving...', f.datalen);
+        setFileStatus(f, f.up ? '送信中…' : '受信中…', f.datalen);
         break;
     case 'done':
         delFileStatusButtons(f, true, true, true);
-        setFileStatus(f, 'Done.');
+        setFileStatus(f, '完了しました。');
         if(!f.up) {
             let url = URL.createObjectURL(data);
             let a = document.createElement('a');
@@ -2592,9 +2592,9 @@ function gotFileTransferEvent(state, data) {
     case 'cancelled':
         delFileStatusButtons(f, true, true, true);
         if(data)
-            setFileStatus(f, `Cancelled: ${data.toString()}.`);
+            setFileStatus(f, `キャンセルされました: ${data.toString()}。`);
         else
-            setFileStatus(f, 'Cancelled.');
+            setFileStatus(f, 'キャンセルされました。');
         break;
     case 'closed':
         break;
@@ -2625,8 +2625,8 @@ function gotUserMessage(id, dest, username, time, privileged, kind, error, messa
             console.error(`Got unprivileged message of kind ${kind}`);
             return;
         }
-        let from = id ? (username || 'Anonymous') : 'The Server';
-        displayError(`${from} said: ${message}`, kind);
+        let from = id ? (username || '匿名ユーザー') : 'サーバー';
+        displayError(`${from}の応答: ${message}`, kind);
         break;
     }
     case 'mute': {
@@ -2635,8 +2635,8 @@ function gotUserMessage(id, dest, username, time, privileged, kind, error, messa
             return;
         }
         setLocalMute(true, true);
-        let by = username ? ' by ' + username : '';
-        displayWarning(`You have been muted${by}`);
+        let by = username ? username + ' によって' : '';
+        displayWarning(`${by}ミュートされました`);
         break;
     }
     case 'clearchat': {
@@ -2655,11 +2655,11 @@ function gotUserMessage(id, dest, username, time, privileged, kind, error, messa
             return;
         }
         if(error) {
-            displayError(`Token operation failed: ${message}`)
+            displayError(`トークン操作に失敗しました: ${message}`)
             return
         }
         if(typeof message !== 'object') {
-            displayError('Unexpected type for token');
+            displayError('トークンの形式が正しくありません');
             return;
         }
         let f = formatToken(message, false);
@@ -2667,7 +2667,7 @@ function gotUserMessage(id, dest, username, time, privileged, kind, error, messa
         if('share' in navigator) {
             try {
                 navigator.share({
-                    title: `Invitation to Galene group ${message.group}`,
+                    title: `Galène グループ ${message.group} への招待`,
                     text: f[0],
                     url: f[1],
                 });
@@ -2683,7 +2683,7 @@ function gotUserMessage(id, dest, username, time, privileged, kind, error, messa
             return;
         }
         if(error) {
-            displayError(`Token operation failed: ${message}`)
+            displayError(`トークン操作に失敗しました: ${message}`)
             return
         }
         let s = '';
@@ -2700,12 +2700,12 @@ function gotUserMessage(id, dest, username, time, privileged, kind, error, messa
             return;
         }
         let u = message.username ?
-            'username ' + message.username :
-            'unknown username';
+            'ユーザー名 ' + message.username :
+            '不明なユーザー名';
         let a = message.address ?
-            'address ' + message.address :
-            'unknown address';
-        localMessage(`User ${message.id} has ${u} and ${a}.`);
+            'アドレス ' + message.address :
+            '不明なアドレス';
+        localMessage(`ユーザー ${message.id} の${u}、${a}。`);
         break;
     }
     default:
@@ -2725,34 +2725,36 @@ function formatToken(token, details) {
     url.search = params.toString();
     let foruser = '', by = '', togroup = '';
     if(token.username)
-        foruser = ` for user ${token.username}`;
+        foruser = `（ユーザー ${token.username} 用）`;
     if(details) {
         if(token.issuedBy)
-            by = ' issued by ' + token.issuedBy;
+            by = `（${token.issuedBy} が発行`;
         if(token.issuedAt) {
             if(by === '')
-                by = ' issued at ' + (new Date(token.issuedAt)).toLocaleString();
+                by = '（' + (new Date(token.issuedAt)).toLocaleString() + ' に発行）';
             else
-                by = by + ' at ' + (new Date(token.issuedAt)).toLocaleString();
+                by = by + ' ' + (new Date(token.issuedAt)).toLocaleString() + ' に発行）';
+        } else if(by !== '') {
+            by = by + '）';
         }
     } else {
         if(token.group)
-            togroup = ' to group ' + token.group;
+            togroup = `（グループ ${token.group} 宛て）`;
     }
     let since = '';
     if(token["not-before"])
-        since = ` since ${(new Date(token['not-before'])).toLocaleString()}`
+        since = `${(new Date(token['not-before'])).toLocaleString()} 以降`
     /** @type{Date} */
     let expires = null;
     let until = '';
     if(token.expires) {
         expires = new Date(token.expires)
-        until = ` until ${expires.toLocaleString()}`;
+        until = `${expires.toLocaleString()} まで`;
     }
     return [
         (expires && (expires >= new Date())) ?
-            `Invitation${foruser}${togroup}${by} valid${since}${until}` :
-            `Expired invitation${foruser}${togroup}${by}`,
+            `招待${foruser}${togroup}${by} 有効期間: ${since}${until}` :
+            `期限切れの招待${foruser}${togroup}${by}`,
         url.toString(),
     ];
 }
@@ -2886,8 +2888,8 @@ function addToChatbox(id, peerId, dest, nick, time, privileged, history, kind, m
             let u = dest && serverConnection.users[dest];
             let name = (u && u.username);
             user.textContent = dest ?
-                `${nick || '(anon)'} \u2192 ${name || '(anon)'}` :
-                (nick || '(anon)');
+                `${nick || '(\u533f\u540d)'} \u2192 ${name || '(\u533f\u540d)'}` :
+                (nick || '(\u533f\u540d)');
             user.classList.add('message-user');
             header.appendChild(user);
             header.classList.add('message-header');
@@ -2913,7 +2915,7 @@ function addToChatbox(id, peerId, dest, nick, time, privileged, history, kind, m
         asterisk.textContent = '*';
         asterisk.classList.add('message-me-asterisk');
         let user = document.createElement('span');
-        user.textContent = nick || '(anon)';
+        user.textContent = nick || '(匿名)';
         user.classList.add('message-me-user');
         body.classList.add('message-me-content');
         container.appendChild(asterisk);
@@ -2946,26 +2948,26 @@ function chatMessageMenu(elt) {
     if(!peerId)
         return;
     let username = elt.dataset.username;
-    let u = username || 'user';
+    let u = username || 'ユーザー';
 
     let items = [];
     if(messageId)
-        items.push({label: 'Delete message', onClick: () => {
+        items.push({label: 'メッセージを削除', onClick: () => {
             serverConnection.groupAction('clearchat', {
                 id: messageId,
                 userId: peerId,
             });
         }});
-    items.push({label: `Delete all from ${u}`,
+    items.push({label: `${u} のメッセージをすべて削除`,
                 onClick: () => {
                     serverConnection.groupAction('clearchat', {
                         userId: peerId,
                     });
                 }});
-    items.push({label: `Identify ${u}`, onClick: () => {
+    items.push({label: `${u} を識別`, onClick: () => {
         serverConnection.userAction('identify', peerId);
     }});
-    items.push({label: `Kick out ${u}`, onClick: () => {
+    items.push({label: `${u} を退出させる`, onClick: () => {
         serverConnection.userAction('kick', peerId);
     }});
 
@@ -3068,18 +3070,18 @@ function operatorPredicate() {
     if(serverConnection && serverConnection.permissions &&
        serverConnection.permissions.indexOf('op') >= 0)
         return null;
-    return 'You are not an operator';
+    return 'あなたは管理者ではありません';
 }
 
 function recordingPredicate() {
     if(serverConnection && serverConnection.permissions &&
        serverConnection.permissions.indexOf('record') >= 0)
         return null;
-    return 'You are not allowed to record';
+    return '録画する権限がありません';
 }
 
 commands.help = {
-    description: 'display this help',
+    description: 'このヘルプを表示する',
     f: (c, r) => {
         /** @type {string[]} */
         let cs = [];
@@ -3132,17 +3134,17 @@ commands.unset = {
 };
 
 commands.leave = {
-    description: "leave group",
+    description: "グループから退出する",
     f: (c, r) => {
         if(!serverConnection)
-            throw new Error('Not connected');
+            throw new Error('接続されていません');
         serverConnection.close();
     }
 };
 
 commands.clear = {
     predicate: operatorPredicate,
-    description: 'clear the chat history',
+    description: 'チャット履歴を消去する',
     f: (c, r) => {
         serverConnection.groupAction('clearchat');
     }
@@ -3150,8 +3152,8 @@ commands.clear = {
 
 commands.lock = {
     predicate: operatorPredicate,
-    description: 'lock this group',
-    parameters: '[message]',
+    description: 'このグループをロックする',
+    parameters: '[メッセージ]',
     f: (c, r) => {
         serverConnection.groupAction('lock', r);
     }
@@ -3159,7 +3161,7 @@ commands.lock = {
 
 commands.unlock = {
     predicate: operatorPredicate,
-    description: 'unlock this group, revert the effect of /lock',
+    description: 'このグループのロックを解除する（/lock の効果を元に戻す）',
     f: (c, r) => {
         serverConnection.groupAction('unlock');
     }
@@ -3167,7 +3169,7 @@ commands.unlock = {
 
 commands.record = {
     predicate: recordingPredicate,
-    description: 'start recording',
+    description: '録画を開始する',
     f: (c, r) => {
         serverConnection.groupAction('record');
     }
@@ -3175,7 +3177,7 @@ commands.record = {
 
 commands.unrecord = {
     predicate: recordingPredicate,
-    description: 'stop recording',
+    description: '録画を停止する',
     f: (c, r) => {
         serverConnection.groupAction('unrecord');
     }
@@ -3183,7 +3185,7 @@ commands.unrecord = {
 
 commands.subgroups = {
     predicate: operatorPredicate,
-    description: 'list subgroups',
+    description: 'サブグループを一覧表示する',
     f: (c, r) => {
         serverConnection.groupAction('subgroups');
     }
@@ -3213,24 +3215,24 @@ function parseExpiration(s) {
     if(e) {
         let unit = units[e[2]];
         if(!unit)
-            throw new Error(`Couldn't find unit ${e[2]}`);
+            throw new Error(`単位 ${e[2]} が見つかりません`);
         return parseInt(e[1]) * unit;
     }
     let d = new Date(s);
     if(d.toString() === 'Invalid Date')
-        throw new Error("Couldn't parse expiration date");
+        throw new Error("有効期限の日付を解析できませんでした");
     return d;
 }
 
 function makeTokenPredicate() {
     return (serverConnection.permissions.indexOf('token') < 0 ?
-            "You don't have permission to create tokens" : null);
+            "トークンを作成する権限がありません" : null);
 }
 
 function editTokenPredicate() {
     return (serverConnection.permissions.indexOf('token') < 0 ||
             serverConnection.permissions.indexOf('op') < 0 ?
-            "You don't have permission to edit or list tokens" : null);
+            "トークンを編集または一覧表示する権限がありません" : null);
 }
 
 /**
@@ -3264,8 +3266,8 @@ function makeToken(template) {
 
 commands.invite = {
     predicate: makeTokenPredicate,
-    description: "create an invitation link",
-    parameters: "[username] [expiration]",
+    description: "招待リンクを作成する",
+    parameters: "[ユーザー名] [有効期限]",
     f: (c, r) => {
         let p = parseCommand(r);
         let template = {};
@@ -3288,14 +3290,14 @@ function parseToken(t) {
     } else if(!/^https?:\/\//.exec(t)) {
         return t
     } else {
-        throw new Error("Couldn't parse link");
+        throw new Error("リンクを解析できませんでした");
     }
 }
 
 commands.reinvite = {
     predicate: editTokenPredicate,
-    description: "extend an invitation link",
-    parameters: "link [expiration]",
+    description: "招待リンクの有効期限を延長する",
+    parameters: "リンク [有効期限]",
     f: (c, r) => {
         let p = parseCommand(r);
         let v = {}
@@ -3310,8 +3312,8 @@ commands.reinvite = {
 
 commands.revoke = {
     predicate: editTokenPredicate,
-    description: "revoke an invitation link",
-    parameters: "link",
+    description: "招待リンクを無効化する",
+    parameters: "リンク",
     f: (c, r) => {
         let token = parseToken(r);
         serverConnection.groupAction('edittoken', {
@@ -3323,7 +3325,7 @@ commands.revoke = {
 
 commands.listtokens = {
     predicate: editTokenPredicate,
-    description: "list invitation links",
+    description: "招待リンクを一覧表示する",
     f: (c, r) => {
         serverConnection.groupAction('listtokens');
     }
@@ -3337,7 +3339,7 @@ function renegotiateStreams() {
 }
 
 commands.renegotiate = {
-    description: 'renegotiate media streams',
+    description: 'メディアストリームを再ネゴシエートする',
     f: (c, r) => {
         renegotiateStreams();
     }
@@ -3350,14 +3352,14 @@ commands.replace = {
 };
 
 commands.sharescreen = {
-    description: 'start a screen share',
+    description: '画面共有を開始する',
     f: (c, r) => {
         addShareMedia();
     }
 }
 
 commands.unsharescreen = {
-    description: 'stop screen share',
+    description: '画面共有を停止する',
     f: (c, r) => {
         closeUpMedia('screenshare');
     }
@@ -3413,15 +3415,15 @@ function findUserId(user) {
 }
 
 commands.msg = {
-    parameters: 'user message',
-    description: 'send a private message',
+    parameters: 'ユーザー メッセージ',
+    description: 'プライベートメッセージを送信する',
     f: (c, r) => {
         let p = parseCommand(r);
         if(!p[0])
-            throw new Error('/msg requires parameters');
+            throw new Error('/msg には引数が必要です');
         let id = findUserId(p[0]);
         if(!id)
-            throw new Error(`Unknown user ${p[0]}`);
+            throw new Error(`不明なユーザー ${p[0]} です`);
         serverConnection.chat('', id, p[1]);
         addToChatbox(serverConnection.id, null, id, serverConnection.username,
                      new Date(), false, false, '', p[1]);
@@ -3435,88 +3437,88 @@ commands.msg = {
 function userCommand(c, r) {
     let p = parseCommand(r);
     if(!p[0])
-        throw new Error(`/${c} requires parameters`);
+        throw new Error(`/${c} には引数が必要です`);
     let id = findUserId(p[0]);
     if(!id)
-        throw new Error(`Unknown user ${p[0]}`);
+        throw new Error(`不明なユーザー ${p[0]} です`);
     serverConnection.userAction(c, id, p[1]);
 }
 
 function userMessage(c, r) {
     let p = parseCommand(r);
     if(!p[0])
-        throw new Error(`/${c} requires parameters`);
+        throw new Error(`/${c} には引数が必要です`);
     let id = findUserId(p[0]);
     if(!id)
-        throw new Error(`Unknown user ${p[0]}`);
+        throw new Error(`不明なユーザー ${p[0]} です`);
     serverConnection.userMessage(c, id, p[1]);
 }
 
 commands.kick = {
-    parameters: 'user [message]',
-    description: 'kick out a user',
+    parameters: 'ユーザー [メッセージ]',
+    description: 'ユーザーを退出させる',
     predicate: operatorPredicate,
     f: userCommand,
 };
 
 commands.identify = {
-    parameters: 'user [message]',
-    description: 'identify a user',
+    parameters: 'ユーザー [メッセージ]',
+    description: 'ユーザーを識別する',
     predicate: operatorPredicate,
     f: userCommand,
 };
 
 commands.op = {
-    parameters: 'user',
-    description: 'give operator status',
+    parameters: 'ユーザー',
+    description: '管理者権限を付与する',
     predicate: operatorPredicate,
     f: userCommand,
 };
 
 commands.unop = {
-    parameters: 'user',
-    description: 'revoke operator status',
+    parameters: 'ユーザー',
+    description: '管理者権限を取り消す',
     predicate: operatorPredicate,
     f: userCommand,
 };
 
 commands.present = {
-    parameters: 'user',
-    description: 'give user the right to present',
+    parameters: 'ユーザー',
+    description: 'ユーザーに配信する権限を付与する',
     predicate: operatorPredicate,
     f: userCommand,
 };
 
 commands.unpresent = {
-    parameters: 'user',
-    description: 'revoke the right to present',
+    parameters: 'ユーザー',
+    description: '配信する権限を取り消す',
     predicate: operatorPredicate,
     f: userCommand,
 };
 
 commands.shutup = {
-    parameters: 'user',
-    description: 'revoke the right to send chat messages',
+    parameters: 'ユーザー',
+    description: 'チャットメッセージを送信する権限を取り消す',
     predicate: operatorPredicate,
     f: userCommand,
 };
 
 commands.unshutup = {
-    parameters: 'user',
-    description: 'give the right to send chat messages',
+    parameters: 'ユーザー',
+    description: 'チャットメッセージを送信する権限を付与する',
     predicate: operatorPredicate,
     f: userCommand,
 };
 
 commands.mute = {
-    parameters: 'user',
-    description: 'mute a remote user',
+    parameters: 'ユーザー',
+    description: 'リモートユーザーをミュートする',
     predicate: operatorPredicate,
     f: userMessage,
 };
 
 commands.muteall = {
-    description: 'mute all remote users',
+    description: 'すべてのリモートユーザーをミュートする',
     predicate: operatorPredicate,
     f: (c, r) => {
         serverConnection.userMessage('mute', null, null, true);
@@ -3524,8 +3526,8 @@ commands.muteall = {
 }
 
 commands.warn = {
-    parameters: 'user message',
-    description: 'send a warning to a user',
+    parameters: 'ユーザー メッセージ',
+    description: 'ユーザーに警告を送信する',
     predicate: operatorPredicate,
     f: (c, r) => {
         userMessage('warning', r);
@@ -3533,18 +3535,18 @@ commands.warn = {
 };
 
 commands.wall = {
-    parameters: 'message',
-    description: 'send a warning to all users',
+    parameters: 'メッセージ',
+    description: 'すべてのユーザーに警告を送信する',
     predicate: operatorPredicate,
     f: (c, r) => {
         if(!r)
-            throw new Error('empty message');
+            throw new Error('メッセージが空です');
         serverConnection.userMessage('warning', '', r);
     },
 };
 
 commands.raise = {
-    description: 'raise hand',
+    description: '挙手する',
     f: (c, r) => {
         serverConnection.userAction(
             "setdata", serverConnection.id, {"raisehand": true},
@@ -3553,7 +3555,7 @@ commands.raise = {
 }
 
 commands.unraise = {
-    description: 'unraise hand',
+    description: '挙手を取り消す',
     f: (c, r) => {
         serverConnection.userAction(
             "setdata", serverConnection.id, {"raisehand": null},
@@ -3590,16 +3592,16 @@ function presentFile() {
 }
 
 commands.presentfile = {
-    description: 'broadcast a video or audio file',
+    description: 'ビデオまたは音声ファイルを配信する',
     f: (c, r) => {
         presentFile();
     },
     predicate: () => {
         if(!canFile())
-            return 'Your browser does not support presenting arbitrary files';
+            return 'お使いのブラウザは任意のファイルの配信に対応していません';
         if(!serverConnection || !serverConnection.permissions ||
            serverConnection.permissions.indexOf('present') < 0)
-            return 'You are not authorised to present.';
+            return '配信する権限がありません。';
         return null;
     }
 };
@@ -3628,15 +3630,15 @@ function sendFile(id) {
 }
 
 commands.sendfile = {
-    parameters: 'user',
-    description: 'send a file (this will disclose your IP address)',
+    parameters: 'ユーザー',
+    description: 'ファイルを送信する（IP アドレスが相手に知られます）',
     f: (c, r) => {
         let p = parseCommand(r);
         if(!p[0])
-            throw new Error(`/${c} requires parameters`);
+            throw new Error(`/${c} には引数が必要です`);
         let id = findUserId(p[0]);
         if(!id)
-            throw new Error(`Unknown user ${p[0]}`);
+            throw new Error(`不明なユーザー ${p[0]} です`);
         sendFile(id);
     },
 };
@@ -3690,14 +3692,14 @@ async function relayTest() {
 
 commands['relay-test'] = {
     f: async (c, r) => {
-        localMessage('Relay test in progress...');
+        localMessage('リレーテストを実行中...');
         try {
             let s = Date.now();
             let rtt = await relayTest();
             let e = Date.now();
-            localMessage(`Relay test successful in ${e-s}ms, RTT ${rtt}ms`);
+            localMessage(`リレーテスト成功: ${e-s}ms、RTT ${rtt}ms`);
         } catch(e) {
-            localMessage(`Relay test failed: ${e}`);
+            localMessage(`リレーテスト失敗: ${e}`);
         }
     }
 }
@@ -3735,7 +3737,7 @@ function handleInput() {
                 let c = commands[cmd];
                 if(!c) {
                     displayError(
-                        `Unknown command /${cmd}, type /help for help`
+                        `不明なコマンド /${cmd} です。/help でヘルプを表示します`
                     );
                     return;
                 }
@@ -3761,7 +3763,7 @@ function handleInput() {
     }
 
     if(!serverConnection || !serverConnection.socket) {
-        displayError("Not connected.");
+        displayError("接続されていません。");
         return;
     }
 
@@ -3984,7 +3986,7 @@ async function serverConnect() {
         await serverConnection.connect(url);
     } catch(e) {
         console.error(e);
-        displayError(`Couldn't connect to ${url}: ${e.message}`);
+        displayError(e.message ? `${url} に接続できませんでした: ${e.message}` : `${url} に接続できませんでした`);
     }
 }
 
@@ -3996,7 +3998,7 @@ async function start() {
         groupStatus = await r.json()
     } catch(e) {
         console.error(e);
-        displayWarning("Couldn't fetch status: " + e);
+        displayWarning("状態を取得できませんでした: " + e);
         groupStatus = {};
     }
 

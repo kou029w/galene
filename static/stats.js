@@ -31,12 +31,12 @@ async function listStats() {
         l = await r.json();
     } catch(e) {
         console.error(e);
-        table.textContent = `Couldn't fetch stats: ${e}`;
+        table.textContent = `統計情報を取得できませんでした: ${e}`;
         return;
     }
 
     if(l.length === 0) {
-        table.textContent = '(No group found.)';
+        table.textContent = '(グループはありません)';
         return;
     }
 

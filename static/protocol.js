@@ -708,7 +708,7 @@ ServerConnection.prototype.newUpStream = function(localId) {
         throw new Error('Eek!');
 
     if(typeof RTCPeerConnection === 'undefined')
-        throw new Error("This browser doesn't support WebRTC");
+        throw new Error("このブラウザーは WebRTC に対応していません。");
 
 
     let pc = new RTCPeerConnection(sc.getRTCConfiguration());
@@ -1895,7 +1895,7 @@ ServerConnection.prototype.sendFile = function(id, file) {
         if(sc.onfiletransfer)
             sc.onfiletransfer.call(sc, f);
         else
-            throw new Error('this client does not implement file transfer');
+            throw new Error('このクライアントはファイル転送に対応していません。');
     } catch(e) {
         f.cancel(e);
         return;
@@ -1958,7 +1958,7 @@ TransferredFile.prototype.receive = async function() {
     f.data = [];
     f.datalen = 0;
     f.dc.onclose = function(e) {
-        f.cancel('remote peer closed connection');
+        f.cancel('相手が接続を閉じました。');
     };
     try {
         f.dc.binaryType = 'blob';
@@ -2029,7 +2029,7 @@ TransferredFile.prototype.answer = async function(sdp) {
         }
         f.dc = /** @type{RTCDataChannel} */(e.channel);
         f.dc.onclose = function(e) {
-            f.cancel('remote peer closed connection');
+            f.cancel('相手が接続を閉じました。');
         };
         f.dc.onerror = function(e) {
             /** @ts-ignore */
@@ -2160,7 +2160,7 @@ TransferredFile.prototype.receiveData = async function(data) {
     f.dc.onmessage = null;
 
     if(f.datalen != f.size) {
-        f.cancel('extra data at end of file');
+        f.cancel('ファイル末尾に余分なデータがあります。');
         return;
     }
 
@@ -2207,8 +2207,8 @@ ServerConnection.prototype.fileTransfer = function(id, username, message) {
             version = '1';
         } else {
             sendFileCancel(sc, id, message.id,
-                       `Unknown protocol version ${message.version}; ` +
-                       'perhaps you need to upgrade your client ?');
+                       `不明なプロトコルバージョンです（${message.version}）。` +
+                       'クライアントをアップグレードする必要があるかもしれません。');
             return;
         }
 
@@ -2232,7 +2232,7 @@ ServerConnection.prototype.fileTransfer = function(id, username, message) {
             if(sc.onfiletransfer)
                 sc.onfiletransfer.call(sc, f);
             else {
-                f.cancel('this client does not implement file transfer');
+                f.cancel('このクライアントはファイル転送に対応していません。');
                 return;
             }
         } catch(e) {
@@ -2252,8 +2252,8 @@ ServerConnection.prototype.fileTransfer = function(id, username, message) {
         if((message.version instanceof Array) && message.version.includes('1')) {
             f.version = '1';
         } else {
-            f.cancel(`Unknown protocol version ${message.version}; ` +
-                     'perhaps you need to upgrade your client ?'
+            f.cancel(`不明なプロトコルバージョンです（${message.version}）。` +
+                     'クライアントをアップグレードする必要があるかもしれません。'
                     );
             return;
         }

@@ -30,13 +30,13 @@ function httpError(r) {
     let s = r.statusText;
     if(s === '') {
         switch(r.status) {
-            case 401: s = 'Unauthorised'; break;
-            case 403: s = 'Forbidden'; break;
-            case 404: s = 'Not Found'; break;
+            case 401: s = '認証が必要です'; break;
+            case 403: s = 'アクセスが拒否されました'; break;
+            case 404: s = '見つかりません'; break;
         }
     }
 
-    return new Error(`The server said: ${r.status} ${s}`);
+    return new Error(`サーバーの応答: ${r.status} ${s}`);
 }
 
 /**
@@ -51,7 +51,7 @@ async function listObjects(url) {
         throw httpError(r);
     let data = await r.json();
     if(!(data instanceof Array))
-        throw new Error("Server didn't return array");
+        throw new Error("サーバーが配列を返しませんでした");
     return data;
  }
 
@@ -97,9 +97,9 @@ async function getObject(url, etag) {
         throw httpError(r);
     let newetag = r.headers.get("ETag");
     if(!newetag)
-        throw new Error("The server didn't return an ETag");
+        throw new Error("サーバーが ETag を返しませんでした");
     if(etag && newetag !== etag)
-        throw new Error("The server returned a mismatched ETag");
+        throw new Error("サーバーが一致しない ETag を返しました");
     let data = await r.json();
     return {etag: newetag, data: data}
 }
@@ -359,7 +359,7 @@ async function createToken(group, template) {
         throw httpError(r);
     let t = r.headers.get('Location');
     if(!t)
-        throw new Error("Server didn't return location header");
+        throw new Error("サーバーが Location ヘッダーを返しませんでした");
     return t;
 }
 
@@ -371,7 +371,7 @@ async function createToken(group, template) {
  */
 async function updateToken(group, token, etag) {
     if(!token.token)
-        throw new Error("Unnamed token");
+        throw new Error("名前のないトークン");
     return await updateObject(
         `/galene-api/v0/.groups/${group}/.tokens/${token.token}`,
         token, etag);
